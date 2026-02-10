@@ -1,19 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Search, Cake, Heart, Calendar, MessageCircle, Loader } from 'lucide-react';
+import { Search, Users, Loader, Sparkles } from 'lucide-react';
 import { supabase, Member } from '../lib/supabase';
 import {
   isTodayBirthday,
   isTodayAnniversary,
-  getDaysUntilBirthday,
-  formatDate,
-  getAge,
 } from '../lib/dateUtils';
 
 export default function Members() {
   const [members, setMembers] = useState<Member[]>([]);
   const [filteredMembers, setFilteredMembers] = useState<Member[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<'name' | 'upcoming'>('name');
   const [loading, setLoading] = useState(true);
   const [todayCelebrations, setTodayCelebrations] = useState<Member[]>([]);
 
@@ -22,8 +18,8 @@ export default function Members() {
   }, []);
 
   useEffect(() => {
-    filterAndSortMembers();
-  }, [members, searchQuery, sortBy]);
+    filterMembers();
+  }, [members, searchQuery]);
 
   const fetchMembers = async () => {
     try {
@@ -37,163 +33,128 @@ export default function Members() {
       setMembers(data || []);
 
       const celebrations = (data || []).filter(
-        (member) => isTodayBirthday(member.dob) || isTodayAnniversary(member.anniversary)
+        (m) => isTodayBirthday(m.dob) || isTodayAnniversary(m.anniversary)
       );
       setTodayCelebrations(celebrations);
-    } catch (error) {
-      console.error('Error fetching members:', error);
+    } catch (err) {
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  const filterAndSortMembers = () => {
-    let filtered = members.filter((member) =>
-      member.name.toLowerCase().includes(searchQuery.toLowerCase())
+  const filterMembers = () => {
+    const filtered = members.filter((m) =>
+      m.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
-
-    if (sortBy === 'upcoming') {
-      filtered = filtered.sort(
-        (a, b) => getDaysUntilBirthday(a.dob) - getDaysUntilBirthday(b.dob)
-      );
-    } else {
-      filtered = filtered.sort((a, b) => a.name.localeCompare(b.name));
-    }
-
     setFilteredMembers(filtered);
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-maroon-50 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-maroon-50 via-white to-maroon-100">
         <div className="text-center">
           <Loader className="animate-spin text-maroon-800 mx-auto mb-4" size={48} />
-          <p className="text-gray-600 text-lg">Loading members...</p>
+          <p className="text-maroon-700 font-medium">Loading members...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-maroon-50 py-8 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-maroon-50 via-white to-maroon-100 py-10 px-4">
       <div className="container mx-auto max-w-7xl">
+
+        {/* 🎉 Today Banner */}
         {todayCelebrations.length > 0 && (
-          <div className="mb-8 bg-gradient-to-r from-maroon-800 to-maroon-600 text-white rounded-2xl shadow-2xl p-6 md:p-8 animate-fadeIn animate-glow">
-            <h2 className="text-2xl md:text-3xl font-bold mb-4 flex items-center gap-3">
-              <Cake size={32} />
-              Today's Celebrations!
-            </h2>
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {todayCelebrations.map((member) => (
-                <div
-                  key={member.id}
-                  className="bg-white/10 backdrop-blur-sm rounded-lg p-4"
+          <div className="mb-10 bg-gradient-to-r from-maroon-800 to-maroon-600 text-white rounded-3xl p-6 md:p-8 shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <Sparkles size={28} />
+              <h2 className="text-2xl font-bold">
+                Today’s Celebrations
+              </h2>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              {todayCelebrations.map((m) => (
+                <span
+                  key={m.id}
+                  className="bg-white/15 px-4 py-2 rounded-full font-semibold backdrop-blur-sm"
                 >
-                  <p className="font-semibold text-lg">{member.name}</p>
-                  <p className="text-sm">
-                    {isTodayBirthday(member.dob) && `🎂 Birthday - ${getAge(member.dob)} years old!`}
-                    {isTodayAnniversary(member.anniversary) && '💕 Anniversary!'}
-                  </p>
-                </div>
+                  🎉 {m.name}
+                </span>
               ))}
             </div>
           </div>
         )}
 
-        <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 mb-8 animate-fadeIn">
-          <h1 className="text-3xl md:text-4xl font-bold text-maroon-800 mb-6">
-            Community Members
-          </h1>
-
-          <div className="flex flex-col md:flex-row gap-4 mb-6">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-              <input
-                type="text"
-                placeholder="Search by name..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:border-maroon-800 focus:outline-none transition-colors"
-              />
+        {/* Header */}
+        <div className="bg-white rounded-3xl shadow-xl p-8 mb-10">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+            <div>
+              <h1 className="text-3xl md:text-4xl font-bold text-maroon-800 flex items-center gap-3">
+                <Users />
+                Community Members
+              </h1>
+              <p className="text-maroon-600 mt-2">
+                A beautiful list of people celebrating together
+              </p>
             </div>
 
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as 'name' | 'upcoming')}
-              className="px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-maroon-800 focus:outline-none transition-colors"
-            >
-              <option value="name">Sort by Name</option>
-              <option value="upcoming">Sort by Upcoming Birthday</option>
-            </select>
+            <div className="relative w-full md:w-80">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-maroon-400" size={18} />
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search members..."
+                className="w-full pl-12 pr-4 py-3 border-2 border-maroon-200 rounded-xl focus:border-maroon-700 focus:outline-none"
+              />
+            </div>
           </div>
 
-          <p className="text-gray-600 mb-4">
-            Total Members: <span className="font-semibold text-maroon-800">{filteredMembers.length}</span>
+          <p className="mt-6 text-maroon-700 font-medium">
+            Total Members: <span className="font-bold">{filteredMembers.length}</span>
           </p>
         </div>
 
+        {/* Members Grid */}
         {filteredMembers.length === 0 ? (
-          <div className="bg-white rounded-2xl shadow-xl p-12 text-center">
-            <p className="text-gray-600 text-lg">
-              {searchQuery ? 'No members found matching your search.' : 'No members registered yet.'}
+          <div className="bg-white rounded-3xl p-14 text-center shadow-xl">
+            <p className="text-maroon-600 text-lg">
+              No members found.
             </p>
           </div>
         ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredMembers.map((member) => (
               <div
                 key={member.id}
-                className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all transform hover:-translate-y-2 p-6 animate-fadeIn"
+                className="group bg-white rounded-3xl p-8 shadow-lg hover:shadow-2xl transition-all hover:-translate-y-2 border border-maroon-100"
               >
-                <div className="flex items-start justify-between mb-4">
-                  <h3 className="text-xl font-bold text-gray-800">{member.name}</h3>
-                  {(isTodayBirthday(member.dob) || isTodayAnniversary(member.anniversary)) && (
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-maroon-800">
+                    {member.name}
+                  </h3>
+
+                  {(isTodayBirthday(member.dob) ||
+                    isTodayAnniversary(member.anniversary)) && (
                     <span className="text-2xl">🎉</span>
                   )}
                 </div>
 
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Cake size={18} className="text-maroon-800" />
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold">Birthday</p>
-                      <p className="text-sm">{formatDate(member.dob)}</p>
-                      <p className="text-xs text-maroon-800 font-semibold">
-                        {isTodayBirthday(member.dob)
-                          ? `🎂 Today! (${getAge(member.dob)} years old)`
-                          : `in ${getDaysUntilBirthday(member.dob)} days`}
-                      </p>
-                    </div>
-                  </div>
+                <div className="text-sm text-maroon-600">
+                  <p className="font-semibold">Joined</p>
+                  <p>
+                    {new Date(member.created_at).toLocaleDateString(undefined, {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                    })}
+                  </p>
+                </div>
 
-                  {member.anniversary && (
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <Heart size={18} className="text-maroon-800" />
-                      <div className="flex-1">
-                        <p className="text-sm font-semibold">Anniversary</p>
-                        <p className="text-sm">{formatDate(member.anniversary)}</p>
-                        {isTodayAnniversary(member.anniversary) && (
-                          <p className="text-xs text-maroon-800 font-semibold">💕 Today!</p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Calendar size={18} className="text-maroon-800" />
-                    <div className="flex-1">
-                      <p className="text-sm">
-                        Joined {new Date(member.created_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-
-                  {member.message && (
-                    <div className="flex items-start gap-2 text-gray-600 pt-3 border-t">
-                      <MessageCircle size={18} className="text-maroon-800 mt-1 flex-shrink-0" />
-                      <p className="text-sm italic">{member.message}</p>
-                    </div>
-                  )}
+                <div className="mt-6 h-1 w-full bg-maroon-100 rounded-full overflow-hidden">
+                  <div className="h-full w-1/2 bg-maroon-600 rounded-full group-hover:w-full transition-all"></div>
                 </div>
               </div>
             ))}
