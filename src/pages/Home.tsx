@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Cake, Heart, Sparkles, Timer } from 'lucide-react';
+import { Cake, Heart, Sparkles } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { supabase, Member } from '../lib/supabase';
 
 export default function Home({ onNavigate }: { onNavigate: (page: 'register' | 'members') => void }) {
@@ -16,24 +17,15 @@ export default function Home({ onNavigate }: { onNavigate: (page: 'register' | '
 
   const fetchNextEvents = async () => {
     const { data } = await supabase.from('members').select('*');
-
     if (!data) return;
 
-    const today = new Date();
-
     const birthdays = data
-      .map((m) => ({
-        member: m,
-        date: getNextEventDate(m.dob),
-      }))
+      .map((m) => ({ member: m, date: getNextEventDate(m.dob) }))
       .sort((a, b) => a.date.getTime() - b.date.getTime());
 
     const anniversaries = data
       .filter((m) => m.anniversary)
-      .map((m) => ({
-        member: m,
-        date: getNextEventDate(m.anniversary!),
-      }))
+      .map((m) => ({ member: m, date: getNextEventDate(m.anniversary!) }))
       .sort((a, b) => a.date.getTime() - b.date.getTime());
 
     setNextBirthday(birthdays[0]?.member || null);
@@ -44,104 +36,127 @@ export default function Home({ onNavigate }: { onNavigate: (page: 'register' | '
   };
 
   const updateCountdowns = () => {
-    if (nextBirthday) {
-      setBirthdayCountdown(getCountdown(getNextEventDate(nextBirthday.dob)));
-    }
-    if (nextAnniversary) {
-      setAnniversaryCountdown(getCountdown(getNextEventDate(nextAnniversary.anniversary!)));
-    }
+    if (nextBirthday) setBirthdayCountdown(getCountdown(getNextEventDate(nextBirthday.dob)));
+    if (nextAnniversary) setAnniversaryCountdown(getCountdown(getNextEventDate(nextAnniversary.anniversary!)));
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-maroon-50 px-4 py-16">
-      <div className="container mx-auto text-center">
-        <Sparkles className="mx-auto text-maroon-800 mb-6" size={64} />
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-pink-100 via-white to-maroon-100 px-4 py-20">
 
-        <h1 className="text-4xl md:text-6xl font-bold text-maroon-800 mb-6">
+      {/* Floating Background Sparkles */}
+      <div className="absolute inset-0 opacity-20 pointer-events-none">
+        <Sparkles className="absolute top-20 left-20 text-pink-400 animate-pulse" size={80} />
+        <Sparkles className="absolute bottom-20 right-20 text-maroon-400 animate-pulse" size={100} />
+      </div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 40 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8 }}
+        className="container mx-auto text-center relative z-10"
+      >
+        <motion.div
+          animate={{ rotate: [0, 5, -5, 0] }}
+          transition={{ repeat: Infinity, duration: 6 }}
+        >
+          <Sparkles className="mx-auto text-maroon-800 mb-6" size={70} />
+        </motion.div>
+
+        <h1 className="text-4xl md:text-6xl font-extrabold bg-gradient-to-r from-pink-600 to-maroon-800 bg-clip-text text-transparent mb-6">
           Upcoming Celebrations 🎉
         </h1>
 
-        <p className="text-lg text-gray-700 mb-12 max-w-2xl mx-auto">
-          Never miss a special moment. Here’s what’s coming next in our community.
+        <p className="text-lg text-gray-700 mb-14 max-w-2xl mx-auto">
+          Love, laughter, and memories — countdown to the next beautiful moment.
         </p>
 
-        <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto mb-16">
-          {/* Birthday Countdown */}
+        <div className="grid md:grid-cols-2 gap-10 max-w-5xl mx-auto mb-20">
           <CountdownCard
             title="Next Birthday"
-            icon={<Cake size={36} />}
+            icon={<Cake size={38} />}
             member={nextBirthday}
             countdown={birthdayCountdown}
+            glow="from-pink-400 to-pink-600"
           />
 
-          {/* Anniversary Countdown */}
           <CountdownCard
             title="Next Anniversary"
-            icon={<Heart size={36} />}
+            icon={<Heart size={38} />}
             member={nextAnniversary}
             countdown={anniversaryCountdown}
+            glow="from-maroon-500 to-pink-600"
           />
         </div>
 
-        <div className="flex flex-col sm:flex-row justify-center gap-4">
-          <button
+        <div className="flex flex-col sm:flex-row justify-center gap-6">
+          <motion.button
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.95 }}
             onClick={() => onNavigate('register')}
-            className="bg-maroon-800 text-white px-8 py-4 rounded-xl text-lg font-semibold hover:bg-maroon-700 transition shadow-lg"
+            className="bg-gradient-to-r from-maroon-700 to-pink-600 text-white px-10 py-4 rounded-2xl text-lg font-semibold shadow-xl"
           >
-            Register Now
-          </button>
+            Register Celebration
+          </motion.button>
 
-          <button
+          <motion.button
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.95 }}
             onClick={() => onNavigate('members')}
-            className="border-2 border-maroon-800 text-maroon-800 px-8 py-4 rounded-xl text-lg font-semibold hover:bg-maroon-50 transition shadow-lg"
+            className="border-2 border-maroon-700 text-maroon-700 px-10 py-4 rounded-2xl text-lg font-semibold bg-white/60 backdrop-blur shadow-xl"
           >
             View Members
-          </button>
+          </motion.button>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }
 
 /* ------------------ Components ------------------ */
 
-function CountdownCard({
-  title,
-  icon,
-  member,
-  countdown,
-}: any) {
+function CountdownCard({ title, icon, member, countdown, glow }: any) {
   return (
-    <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
-      <div className="text-maroon-800 mb-4 flex justify-center">{icon}</div>
+    <motion.div
+      whileHover={{ y: -10 }}
+      transition={{ type: 'spring', stiffness: 200 }}
+      className={`relative rounded-3xl p-[2px] bg-gradient-to-r ${glow}`}
+    >
+      <div className="bg-white/70 backdrop-blur-xl rounded-3xl p-10 shadow-2xl text-center">
+        <div className="text-maroon-700 mb-4 flex justify-center">
+          {icon}
+        </div>
 
-      <h3 className="text-2xl font-bold mb-2">{title}</h3>
+        <h3 className="text-2xl font-bold mb-2">{title}</h3>
 
-      {member && countdown ? (
-        <>
-          <p className="text-lg font-semibold text-gray-800 mb-4">
-            {member.name}
-          </p>
+        {member && countdown ? (
+          <>
+            <p className="text-lg font-semibold text-gray-800 mb-6">
+              {member.name}
+            </p>
 
-          <div className="flex justify-center gap-6 text-maroon-800">
-            <TimeBox label="Days" value={countdown.days} />
-            <TimeBox label="Hours" value={countdown.hours} />
-            <TimeBox label="Minutes" value={countdown.minutes} />
-          </div>
-        </>
-      ) : (
-        <p className="text-gray-600">No upcoming events</p>
-      )}
-    </div>
+            <div className="flex justify-center gap-8 text-maroon-800">
+              <TimeBox label="Days" value={countdown.days} />
+              <TimeBox label="Hours" value={countdown.hours} />
+              <TimeBox label="Minutes" value={countdown.minutes} />
+            </div>
+          </>
+        ) : (
+          <p className="text-gray-600">No upcoming events</p>
+        )}
+      </div>
+    </motion.div>
   );
 }
 
 function TimeBox({ label, value }: { label: string; value: number }) {
   return (
-    <div>
-      <p className="text-3xl font-bold">{value}</p>
-      <p className="text-sm">{label}</p>
-    </div>
+    <motion.div
+      animate={{ scale: [1, 1.08, 1] }}
+      transition={{ repeat: Infinity, duration: 2 }}
+    >
+      <p className="text-4xl font-extrabold">{value}</p>
+      <p className="text-sm text-gray-600">{label}</p>
+    </motion.div>
   );
 }
 

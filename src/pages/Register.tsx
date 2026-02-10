@@ -135,7 +135,7 @@ export default function Register() {
 
             <div>
               <label htmlFor="dob" className="block text-gray-700 font-semibold mb-2">
-                Date of Birth <span className="text-red-500">*</span>
+                Please enter your real date of birth<span className="text-red-500">*</span>
               </label>
               <input
                 type="date"
@@ -166,7 +166,7 @@ export default function Register() {
 
             <div>
               <label htmlFor="message" className="block text-gray-700 font-semibold mb-2">
-                Short Profile Message (Optional)
+                Message to appear with your Birthday / Anniversary wish (Optional)
               </label>
               <textarea
                 id="message"
@@ -175,7 +175,7 @@ export default function Register() {
                 onChange={handleChange}
                 rows={4}
                 className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-maroon-800 focus:outline-none transition-colors resize-none"
-                placeholder="Share something about yourself..."
+                placeholder="A short line that will be shown with your celebration message..."
               />
             </div>
 
