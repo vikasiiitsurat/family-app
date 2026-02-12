@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Search, Users, Loader, Sparkles } from 'lucide-react';
 import { supabase, Member } from '../lib/supabase';
+import { motion, AnimatePresence } from "framer-motion";
+
 import {
   isTodayBirthday,
   isTodayAnniversary,
@@ -12,6 +14,7 @@ export default function Members() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [todayCelebrations, setTodayCelebrations] = useState<Member[]>([]);
+  const [activeCard, setActiveCard] = useState<string | null>(null);
 
   useEffect(() => {
     fetchMembers();
@@ -62,7 +65,14 @@ export default function Members() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-maroon-50 via-white to-maroon-100 py-10 px-4">
+    <motion.div
+      layout
+      className={`min-h-screen py-10 px-4 transition-colors duration-500 ${
+        activeCard
+          ? "bg-gradient-to-br from-maroon-200 via-maroon-100 to-white"
+          : "bg-gradient-to-br from-maroon-50 via-white to-maroon-100"
+      }`}
+    >
       <div className="container mx-auto max-w-7xl">
 
         {/* 🎉 Today Banner */}
@@ -127,71 +137,83 @@ export default function Members() {
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredMembers.map((member) => (
-              <div
-  key={member.id}
-  className="group bg-white rounded-3xl p-8 shadow-lg hover:shadow-2xl transition-all hover:-translate-y-2 border border-maroon-100"
->
-  {/* Header */}
-  <div className="flex items-center justify-between mb-6">
-    <h3 className="text-2xl font-bold text-maroon-800">
-      {member.name}
-    </h3>
+              <motion.div
+                key={member.id}
+                layout
+                onClick={() =>
+                  setActiveCard(activeCard === member.id ? null : member.id)
+                }
+                className={`cursor-pointer rounded-3xl p-8 transition-all duration-500 border
+                  ${
+                    activeCard === member.id
+                      ? "bg-gradient-to-br from-pink-200 via-rose-200 to-pink-300 border-pink-400 shadow-2xl scale-[1.03] ring-4 ring-pink-300"
+                      : "bg-white border-maroon-100 shadow-lg hover:shadow-2xl hover:-translate-y-1"
+                  }
+                `}
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between mb-4">
+                  <h3
+                    className={`text-xl font-bold transition-colors duration-500 ${
+                      activeCard === member.id
+                        ? "text-maroon-900"
+                        : "text-maroon-800"
+                    }`}
+                  >
+                    {member.name}
+                  </h3>
 
-    {(isTodayBirthday(member.dob) ||
-      isTodayAnniversary(member.anniversary)) && (
-      <span className="text-2xl animate-bounce">🎉</span>
-    )}
-  </div>
+                  {(isTodayBirthday(member.dob) ||
+                    isTodayAnniversary(member.anniversary)) && (
+                    <span className="text-2xl animate-bounce">🎉</span>
+                  )}
+                </div>
 
-  {/* Info Section */}
-  <div className="space-y-3 text-sm text-maroon-700">
+                <p className="text-sm text-maroon-500">
+                  Joined {new Date(member.created_at).toLocaleDateString()}
+                </p>
 
-    <div className="flex justify-between border-b border-maroon-100 pb-2">
-      <span className="font-semibold">📧 Email</span>
-      <span className="text-right break-words max-w-[60%]">
-        {member.email}
-      </span>
-    </div>
+                {/* Expand Section */}
+                <AnimatePresence>
+                  {activeCard === member.id && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.4 }}
+                      className="overflow-hidden mt-6 space-y-3 text-sm border-t pt-4 text-maroon-900 border-pink-300"
+                    >
+                      <div className="flex justify-between">
+                        <span className="font-semibold">📧 Email</span>
+                        <span className="text-right max-w-[60%] break-words">
+                          {member.email}
+                        </span>
+                      </div>
 
-    <div className="flex justify-between border-b border-maroon-100 pb-2">
-      <span className="font-semibold">📱 Phone</span>
-      <span>{member.phone || "Not Provided"}</span>
-    </div>
+                      <div className="flex justify-between">
+                        <span className="font-semibold">📱 Phone</span>
+                        <span>{member.phone}</span>
+                      </div>
 
-    <div className="flex justify-between border-b border-maroon-100 pb-2">
-      <span className="font-semibold">🎓 Qualification</span>
-      <span>{member.qualification || "Not Provided"}</span>
-    </div>
+                      <div className="flex justify-between">
+                        <span className="font-semibold">🎓 Qualification</span>
+                        <span>{member.qualification}</span>
+                      </div>
 
-    <div className="flex justify-between">
-      <span className="font-semibold">💼 Current Status</span>
-      <span className="text-right max-w-[60%]">
-        {member.current_status || "Not Provided"}
-      </span>
-    </div>
-
-  </div>
-
-  {/* Joined */}
-  <div className="mt-6 text-xs text-maroon-500">
-    Joined on{" "}
-    {new Date(member.created_at).toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    })}
-  </div>
-
-  {/* Hover Line */}
-  <div className="mt-6 h-1 w-full bg-maroon-100 rounded-full overflow-hidden">
-    <div className="h-full w-1/3 bg-maroon-600 rounded-full group-hover:w-full transition-all duration-500"></div>
-  </div>
-</div>
-
+                      <div className="flex justify-between">
+                        <span className="font-semibold">💼 Status</span>
+                        <span className="text-right max-w-[60%]">
+                          {member.current_status}
+                        </span>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
             ))}
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
