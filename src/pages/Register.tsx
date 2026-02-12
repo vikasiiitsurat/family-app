@@ -164,22 +164,23 @@ export default function Register() {
     />
   ) : (
     <Flatpickr
-      options={{
-        dateFormat: "Y-m-d",
-        maxDate: "today",
-        allowInput: true,
-        monthSelectorType: "dropdown",
-        yearSelectorType: "dropdown",
-      }}
-      value={formData.dob}
-      onChange={(selectedDates, dateStr) =>
-        setFormData({ ...formData, dob: dateStr })
-      }
-      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg
-                 focus:border-maroon-800 focus:ring-2 focus:ring-maroon-200
-                 transition-all"
-      required
-    />
+  options={{
+    dateFormat: "Y-m-d",
+    maxDate: "today",
+    allowInput: true,
+    monthSelectorType: "dropdown",
+    yearSelectorType: "dropdown",
+    disableMobile: true, // VERY IMPORTANT
+  }}
+  value={formData.anniversary}
+  onChange={(selectedDates, dateStr) =>
+    setFormData({ ...formData, anniversary: dateStr })
+  }
+  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg
+             focus:border-maroon-800 focus:ring-2 focus:ring-maroon-200
+             transition-all"
+/>
+
   )}
 </div>
 
@@ -202,22 +203,24 @@ export default function Register() {
                  transition-all"
     />
   ) : (
-    <Flatpickr
-      options={{
-        dateFormat: "Y-m-d",
-        maxDate: "today",
-        allowInput: true,
-        monthSelectorType: "dropdown",
-        yearSelectorType: "dropdown",
-      }}
-      value={formData.anniversary}
-      onChange={(selectedDates, dateStr) =>
-        setFormData({ ...formData, anniversary: dateStr })
-      }
-      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg
-                 focus:border-maroon-800 focus:ring-2 focus:ring-maroon-200
-                 transition-all"
-    />
+ <Flatpickr
+  options={{
+    dateFormat: "Y-m-d",
+    maxDate: "today",
+    allowInput: true,
+    monthSelectorType: "dropdown",
+    yearSelectorType: "dropdown",
+    disableMobile: true, 
+  }}
+  value={formData.anniversary}
+  onChange={(selectedDates, dateStr) =>
+    setFormData({ ...formData, anniversary: dateStr })
+  }
+  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg
+             focus:border-maroon-800 focus:ring-2 focus:ring-maroon-200
+             transition-all"
+/>
+
   )}
 </div>
 
