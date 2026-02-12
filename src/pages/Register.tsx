@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import Confetti from '../components/Confetti';
 import Flatpickr from "react-flatpickr";
 import "flatpickr/dist/themes/material_blue.css";
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -149,24 +150,39 @@ export default function Register() {
     Date of Birth <span className="text-red-500">*</span>
   </label>
 
-  <Flatpickr
-    options={{
-      dateFormat: "Y-m-d",
-      maxDate: "today",
-      allowInput: true,
-      monthSelectorType: "dropdown", // dropdown instead of scrolling
-      yearSelectorType: "dropdown",
-    }}
-    value={formData.dob}
-    onChange={(selectedDates, dateStr) =>
-      setFormData({ ...formData, dob: dateStr })
-    }
-    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg
-               focus:border-maroon-800 focus:ring-2 focus:ring-maroon-200
-               transition-all"
-    required
-  />
+  {isMobile ? (
+    <input
+      type="date"
+      name="dob"
+      value={formData.dob}
+      onChange={handleChange}
+      required
+      max={new Date().toISOString().split("T")[0]}
+      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg
+                 focus:border-maroon-800 focus:ring-2 focus:ring-maroon-200
+                 transition-all"
+    />
+  ) : (
+    <Flatpickr
+      options={{
+        dateFormat: "Y-m-d",
+        maxDate: "today",
+        allowInput: true,
+        monthSelectorType: "dropdown",
+        yearSelectorType: "dropdown",
+      }}
+      value={formData.dob}
+      onChange={(selectedDates, dateStr) =>
+        setFormData({ ...formData, dob: dateStr })
+      }
+      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg
+                 focus:border-maroon-800 focus:ring-2 focus:ring-maroon-200
+                 transition-all"
+      required
+    />
+  )}
 </div>
+
 
 {/* Anniversary Date */}
 <div>
@@ -174,23 +190,37 @@ export default function Register() {
     Anniversary Date (Optional)
   </label>
 
-  <Flatpickr
-    options={{
-      dateFormat: "Y-m-d",
-      maxDate: "today",
-      allowInput: true,
-      monthSelectorType: "dropdown",
-      yearSelectorType: "dropdown",
-    }}
-    value={formData.anniversary}
-    onChange={(selectedDates, dateStr) =>
-      setFormData({ ...formData, anniversary: dateStr })
-    }
-    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg
-               focus:border-maroon-800 focus:ring-2 focus:ring-maroon-200
-               transition-all"
-  />
+  {isMobile ? (
+    <input
+      type="date"
+      name="anniversary"
+      value={formData.anniversary}
+      onChange={handleChange}
+      max={new Date().toISOString().split("T")[0]}
+      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg
+                 focus:border-maroon-800 focus:ring-2 focus:ring-maroon-200
+                 transition-all"
+    />
+  ) : (
+    <Flatpickr
+      options={{
+        dateFormat: "Y-m-d",
+        maxDate: "today",
+        allowInput: true,
+        monthSelectorType: "dropdown",
+        yearSelectorType: "dropdown",
+      }}
+      value={formData.anniversary}
+      onChange={(selectedDates, dateStr) =>
+        setFormData({ ...formData, anniversary: dateStr })
+      }
+      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg
+                 focus:border-maroon-800 focus:ring-2 focus:ring-maroon-200
+                 transition-all"
+    />
+  )}
 </div>
+
 
             <div>
               <label className="block text-gray-700 font-semibold mb-2">
