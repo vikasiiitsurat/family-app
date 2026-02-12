@@ -128,35 +128,66 @@ export default function Members() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredMembers.map((member) => (
               <div
-                key={member.id}
-                className="group bg-white rounded-3xl p-8 shadow-lg hover:shadow-2xl transition-all hover:-translate-y-2 border border-maroon-100"
-              >
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-bold text-maroon-800">
-                    {member.name}
-                  </h3>
+  key={member.id}
+  className="group bg-white rounded-3xl p-8 shadow-lg hover:shadow-2xl transition-all hover:-translate-y-2 border border-maroon-100"
+>
+  {/* Header */}
+  <div className="flex items-center justify-between mb-6">
+    <h3 className="text-2xl font-bold text-maroon-800">
+      {member.name}
+    </h3>
 
-                  {(isTodayBirthday(member.dob) ||
-                    isTodayAnniversary(member.anniversary)) && (
-                    <span className="text-2xl">🎉</span>
-                  )}
-                </div>
+    {(isTodayBirthday(member.dob) ||
+      isTodayAnniversary(member.anniversary)) && (
+      <span className="text-2xl animate-bounce">🎉</span>
+    )}
+  </div>
 
-                <div className="text-sm text-maroon-600">
-                  <p className="font-semibold">Joined</p>
-                  <p>
-                    {new Date(member.created_at).toLocaleDateString(undefined, {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                    })}
-                  </p>
-                </div>
+  {/* Info Section */}
+  <div className="space-y-3 text-sm text-maroon-700">
 
-                <div className="mt-6 h-1 w-full bg-maroon-100 rounded-full overflow-hidden">
-                  <div className="h-full w-1/2 bg-maroon-600 rounded-full group-hover:w-full transition-all"></div>
-                </div>
-              </div>
+    <div className="flex justify-between border-b border-maroon-100 pb-2">
+      <span className="font-semibold">📧 Email</span>
+      <span className="text-right break-words max-w-[60%]">
+        {member.email}
+      </span>
+    </div>
+
+    <div className="flex justify-between border-b border-maroon-100 pb-2">
+      <span className="font-semibold">📱 Phone</span>
+      <span>{member.phone || "Not Provided"}</span>
+    </div>
+
+    <div className="flex justify-between border-b border-maroon-100 pb-2">
+      <span className="font-semibold">🎓 Qualification</span>
+      <span>{member.qualification || "Not Provided"}</span>
+    </div>
+
+    <div className="flex justify-between">
+      <span className="font-semibold">💼 Current Status</span>
+      <span className="text-right max-w-[60%]">
+        {member.current_status || "Not Provided"}
+      </span>
+    </div>
+
+  </div>
+
+  {/* Joined */}
+  <div className="mt-6 text-xs text-maroon-500">
+    Joined on{" "}
+    {new Date(member.created_at).toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    })}
+  </div>
+
+  {/* Hover Line */}
+  <div className="mt-6 h-1 w-full bg-maroon-100 rounded-full overflow-hidden">
+    <div className="h-full w-1/3 bg-maroon-600 rounded-full group-hover:w-full transition-all duration-500"></div>
+  </div>
+</div>
+
             ))}
           </div>
         )}
