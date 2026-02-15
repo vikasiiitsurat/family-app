@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { UserPlus, CheckCircle, Edit3, Search, RefreshCw, Linkedin, Instagram, MessageCircle, Sparkles } from 'lucide-react';
+import { UserPlus, CheckCircle, Edit3, Search, RefreshCw, Linkedin, Instagram, MessageCircle, Sparkles, Camera, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import Confetti from '../components/Confetti';
 import Flatpickr from "react-flatpickr";
@@ -22,7 +22,12 @@ export default function Register() {
     linkedin: '',
     whatsapp: '',
     instagram: '',
+    profilePhoto: '',
   });
+
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string>('');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchType, setSearchType] = useState<'email' | 'phone'>('email');
@@ -47,6 +52,8 @@ export default function Register() {
     setSuccess(false);
     setUserFound(false);
     setSearchQuery('');
+    setPhotoFile(null);
+    setPhotoPreview('');
     setFormData({
       name: '',
       email: '',
@@ -58,7 +65,77 @@ export default function Register() {
       linkedin: '',
       whatsapp: '',
       instagram: '',
+      profilePhoto: '',
     });
+  };
+
+  // Handle photo selection
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Please select a valid image file (JPG, PNG, GIF, WebP)');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image size should be less than 5MB');
+      return;
+    }
+
+    setPhotoFile(file);
+    
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPhotoPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+    setError('');
+  };
+
+  // Remove photo
+  const handleRemovePhoto = () => {
+    setPhotoFile(null);
+    setPhotoPreview('');
+    setFormData({ ...formData, profilePhoto: '' });
+  };
+
+  // Upload photo to Supabase Storage
+  const uploadPhoto = async (file: File): Promise<string | null> => {
+    try {
+      setUploadingPhoto(true);
+      
+      // Create unique filename
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `profile-photos/${fileName}`;
+
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('member-photos') // Make sure this bucket exists in your Supabase Storage
+        .upload(filePath, file);
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        throw uploadError;
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('member-photos')
+        .getPublicUrl(filePath);
+
+      setUploadingPhoto(false);
+      return publicUrl;
+    } catch (err) {
+      console.error('Error uploading photo:', err);
+      setUploadingPhoto(false);
+      return null;
+    }
   };
 
   // Search for existing user
@@ -97,7 +174,14 @@ export default function Register() {
         linkedin: data.linkedin || '',
         whatsapp: data.whatsapp || '',
         instagram: data.instagram || '',
+        profilePhoto: data.profile_photo || '',
       });
+      
+      // Set photo preview if exists
+      if (data.profile_photo) {
+        setPhotoPreview(data.profile_photo);
+      }
+      
       setOriginalEmail(data.email);
       setUserFound(true);
       setError('');
@@ -136,6 +220,18 @@ export default function Register() {
     }
 
     try {
+      // Upload photo if selected
+      let photoUrl = formData.profilePhoto;
+      if (photoFile) {
+        const uploadedUrl = await uploadPhoto(photoFile);
+        if (!uploadedUrl) {
+          setError('Failed to upload photo. Please try again.');
+          setLoading(false);
+          return;
+        }
+        photoUrl = uploadedUrl;
+      }
+
       if (activeTab === 'register') {
         // New registration
         const { error: insertError } = await supabase.from('members').insert([
@@ -150,6 +246,7 @@ export default function Register() {
             linkedin: formData.linkedin || null,
             whatsapp: formData.whatsapp || null,
             instagram: formData.instagram || null,
+            profile_photo: photoUrl || null,
             timezone,
           },
         ]);
@@ -177,7 +274,10 @@ export default function Register() {
           linkedin: '',
           whatsapp: '',
           instagram: '',
+          profilePhoto: '',
         });
+        setPhotoFile(null);
+        setPhotoPreview('');
       } else {
         // Update profile
         const { error: updateError } = await supabase
@@ -193,6 +293,7 @@ export default function Register() {
             linkedin: formData.linkedin || null,
             whatsapp: formData.whatsapp || null,
             instagram: formData.instagram || null,
+            profile_photo: photoUrl || null,
           })
           .eq('email', originalEmail);
 
@@ -210,6 +311,8 @@ export default function Register() {
         setSuccess(true);
         setUserFound(false);
         setSearchQuery('');
+        setPhotoFile(null);
+        setPhotoPreview('');
         setFormData({
           name: '',
           email: '',
@@ -221,6 +324,7 @@ export default function Register() {
           linkedin: '',
           whatsapp: '',
           instagram: '',
+          profilePhoto: '',
         });
       }
 
@@ -430,6 +534,8 @@ export default function Register() {
                   onClick={() => {
                     setUserFound(false);
                     setSearchQuery('');
+                    setPhotoFile(null);
+                    setPhotoPreview('');
                     setFormData({
                       name: '',
                       email: '',
@@ -441,6 +547,7 @@ export default function Register() {
                       linkedin: '',
                       whatsapp: '',
                       instagram: '',
+                      profilePhoto: '',
                     });
                   }}
                   className="text-blue-700 hover:text-blue-900 font-bold text-sm underline hover:no-underline transition-all"
@@ -453,6 +560,58 @@ export default function Register() {
             {/* Registration/Update Form */}
             {(activeTab === 'register' || userFound) && (
               <form onSubmit={handleSubmit} className="space-y-8">
+
+                {/* Profile Photo Section */}
+                <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-6 rounded-2xl border-2 border-indigo-200">
+                  <h3 className="text-xl font-bold text-maroon-800 mb-5 flex items-center gap-2">
+                    📸 Profile Photo
+                  </h3>
+                  
+                  <div className="flex flex-col items-center gap-6">
+                    {/* Photo Preview */}
+                    <div className="relative">
+                      {photoPreview ? (
+                        <div className="relative group">
+                          <img
+                            src={photoPreview}
+                            alt="Profile preview"
+                            className="w-40 h-40 rounded-full object-cover border-4 border-maroon-800 shadow-xl"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleRemovePhoto}
+                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-2 hover:bg-red-600 transition-all shadow-lg opacity-0 group-hover:opacity-100"
+                          >
+                            <X size={20} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="w-40 h-40 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center border-4 border-dashed border-gray-400">
+                          <Camera className="text-gray-500" size={48} />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Upload Button */}
+                    <div className="w-full max-w-md">
+                      <label className="block">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handlePhotoChange}
+                          className="hidden"
+                        />
+                        <div className="cursor-pointer bg-gradient-to-r from-maroon-800 to-maroon-700 text-white py-4 px-6 rounded-xl font-bold text-center hover:from-maroon-700 hover:to-maroon-600 transition-all transform hover:scale-105 active:scale-95 shadow-lg flex items-center justify-center gap-3">
+                          <Camera size={22} />
+                          {photoPreview ? 'Change Photo' : 'Upload Photo'}
+                        </div>
+                      </label>
+                      <p className="text-gray-600 text-sm mt-3 text-center">
+                        JPG, PNG, GIF or WebP • Max size: 5MB
+                      </p>
+                    </div>
+                  </div>
+                </div>
 
                 {/* Personal Information Section */}
                 <div className="bg-gradient-to-r from-orange-50 to-rose-50 p-6 rounded-2xl border-2 border-orange-200">
@@ -602,13 +761,13 @@ export default function Register() {
                 {/* Submit Button */}
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || uploadingPhoto}
                   className="w-full bg-gradient-to-r from-maroon-800 via-rose-700 to-orange-600 text-white py-5 rounded-2xl font-bold text-lg hover:from-maroon-700 hover:via-rose-600 hover:to-orange-500 transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-2xl border-2 border-maroon-900"
                 >
-                  {loading ? (
+                  {loading || uploadingPhoto ? (
                     <span className="flex items-center justify-center gap-3">
                       <RefreshCw className="animate-spin" size={24} />
-                      {activeTab === 'register' ? 'Creating Your Profile...' : 'Updating Your Profile...'}
+                      {uploadingPhoto ? 'Uploading Photo...' : activeTab === 'register' ? 'Creating Your Profile...' : 'Updating Your Profile...'}
                     </span>
                   ) : (
                     <span className="flex items-center justify-center gap-3">
