@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Users, Loader, Sparkles, Linkedin, Instagram, MessageCircle, Mail, Phone, GraduationCap, Briefcase, Calendar, Heart, ExternalLink, Award, Star, User, MapPin, Zap } from 'lucide-react';
+import { Search, Users, Loader, Sparkles, Linkedin, Instagram, MessageCircle, Mail, Phone, GraduationCap, Briefcase, Calendar, Heart, ExternalLink, Award, Star, User, MapPin, Zap, Copy, Check } from 'lucide-react';
 import { supabase, Member } from '../lib/supabase';
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -15,6 +15,7 @@ export default function Members() {
   const [loading, setLoading] = useState(true);
   const [todayCelebrations, setTodayCelebrations] = useState<Member[]>([]);
   const [activeCard, setActiveCard] = useState<string | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
   useEffect(() => {
     fetchMembers();
@@ -56,6 +57,27 @@ export default function Members() {
   const handleSocialClick = (e: React.MouseEvent, url: string) => {
     e.stopPropagation();
     window.open(url, '_blank');
+  };
+
+  const handleEmailClick = (e: React.MouseEvent, email: string) => {
+    e.stopPropagation();
+    window.location.href = `mailto:${email}`;
+  };
+
+  const handlePhoneClick = (e: React.MouseEvent, phone: string) => {
+    e.stopPropagation();
+    window.location.href = `tel:${phone}`;
+  };
+
+  const handleCopyToClipboard = async (e: React.MouseEvent, text: string, fieldId: string) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(fieldId);
+      setTimeout(() => setCopiedField(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
   };
 
   if (loading) {
@@ -336,7 +358,7 @@ export default function Members() {
                     </motion.div>
                   )}
 
-                  {/* Profile Photo Section - FIXED: Only show once, larger when expanded */}
+                  {/* Profile Photo Section */}
                   <div className="flex flex-col items-center mb-5">
                     <motion.div 
                       animate={isExpanded ? { scale: 1.3 } : { scale: 1 }}
@@ -510,7 +532,7 @@ export default function Members() {
                         transition={{ duration: 0.4, ease: "easeInOut" }}
                         className="overflow-hidden mt-4 space-y-4"
                       >
-                        {/* Contact Information */}
+                        {/* Contact Information - ENHANCED WITH CLICKABLE ACTIONS */}
                         <motion.div 
                           initial={{ x: -20 }}
                           animate={{ x: 0 }}
@@ -523,30 +545,80 @@ export default function Members() {
                           </h4>
 
                           <div className="space-y-2.5">
+                            {/* Email - Clickable */}
                             <motion.div 
                               whileHover={{ scale: 1.02, x: 5 }}
-                              className="flex items-start gap-3 bg-white/50 p-3 rounded-xl hover:bg-white/80 transition-all"
+                              onClick={(e) => handleEmailClick(e, member.email)}
+                              className="flex items-start gap-3 bg-gradient-to-r from-blue-50 to-cyan-50 p-3 rounded-xl hover:from-blue-100 hover:to-cyan-100 transition-all cursor-pointer border-2 border-transparent hover:border-blue-300 group/contact relative"
                             >
-                              <Mail className="text-blue-500 flex-shrink-0 mt-0.5" size={16} />
+                              <motion.div
+                                whileHover={{ scale: 1.2, rotate: 15 }}
+                                className="bg-blue-500 p-2 rounded-lg text-white flex-shrink-0 mt-0.5 shadow-md group-hover/contact:shadow-lg"
+                              >
+                                <Mail size={16} />
+                              </motion.div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-xs font-semibold text-gray-600 mb-0.5">Email</p>
-                                <p className="text-sm font-medium text-gray-800 break-all">
+                                <p className="text-xs font-semibold text-blue-600 mb-0.5 flex items-center gap-2">
+                                  Email 
+                                  <span className="text-[10px] bg-blue-200 text-blue-700 px-2 py-0.5 rounded-full opacity-0 group-hover/contact:opacity-100 transition-opacity">
+                                    Click to send
+                                  </span>
+                                </p>
+                                <p className="text-sm font-medium text-gray-800 break-all group-hover/contact:text-blue-600 transition-colors">
                                   {member.email}
                                 </p>
                               </div>
+                              <motion.button
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={(e) => handleCopyToClipboard(e, member.email, `email-${member.id}`)}
+                                className="bg-blue-200 hover:bg-blue-300 p-1.5 rounded-lg transition-colors opacity-0 group-hover/contact:opacity-100"
+                                title="Copy email"
+                              >
+                                {copiedField === `email-${member.id}` ? (
+                                  <Check size={14} className="text-green-600" />
+                                ) : (
+                                  <Copy size={14} className="text-blue-600" />
+                                )}
+                              </motion.button>
                             </motion.div>
 
+                            {/* Phone - Clickable */}
                             <motion.div 
                               whileHover={{ scale: 1.02, x: 5 }}
-                              className="flex items-start gap-3 bg-white/50 p-3 rounded-xl hover:bg-white/80 transition-all"
+                              onClick={(e) => handlePhoneClick(e, member.phone)}
+                              className="flex items-start gap-3 bg-gradient-to-r from-green-50 to-emerald-50 p-3 rounded-xl hover:from-green-100 hover:to-emerald-100 transition-all cursor-pointer border-2 border-transparent hover:border-green-300 group/contact relative"
                             >
-                              <Phone className="text-green-500 flex-shrink-0 mt-0.5" size={16} />
+                              <motion.div
+                                whileHover={{ scale: 1.2, rotate: 15 }}
+                                className="bg-green-500 p-2 rounded-lg text-white flex-shrink-0 mt-0.5 shadow-md group-hover/contact:shadow-lg"
+                              >
+                                <Phone size={16} />
+                              </motion.div>
                               <div className="flex-1">
-                                <p className="text-xs font-semibold text-gray-600 mb-0.5">Phone</p>
-                                <p className="text-sm font-medium text-gray-800">
+                                <p className="text-xs font-semibold text-green-600 mb-0.5 flex items-center gap-2">
+                                  Phone
+                                  <span className="text-[10px] bg-green-200 text-green-700 px-2 py-0.5 rounded-full opacity-0 group-hover/contact:opacity-100 transition-opacity">
+                                    Click to call
+                                  </span>
+                                </p>
+                                <p className="text-sm font-medium text-gray-800 group-hover/contact:text-green-600 transition-colors">
                                   {member.phone}
                                 </p>
                               </div>
+                              <motion.button
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={(e) => handleCopyToClipboard(e, member.phone, `phone-${member.id}`)}
+                                className="bg-green-200 hover:bg-green-300 p-1.5 rounded-lg transition-colors opacity-0 group-hover/contact:opacity-100"
+                                title="Copy phone"
+                              >
+                                {copiedField === `phone-${member.id}` ? (
+                                  <Check size={14} className="text-green-600" />
+                                ) : (
+                                  <Copy size={14} className="text-green-600" />
+                                )}
+                              </motion.button>
                             </motion.div>
                           </div>
                         </motion.div>

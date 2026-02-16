@@ -451,7 +451,7 @@ export default function Register() {
               </div>
             )}
 
-            {/* Update Profile Search Section */}
+    {/* Update Profile Search Section */}
             {activeTab === 'update' && !userFound && (
               <div className="mb-10 p-8 bg-gradient-to-br from-orange-50 via-rose-50 to-purple-50 rounded-2xl border-2 border-maroon-300 shadow-xl">
                 <h3 className="text-xl font-bold text-maroon-800 mb-6 flex items-center gap-3">
@@ -461,7 +461,7 @@ export default function Register() {
                 
                 <div className="space-y-5">
                   {/* Search Type Toggle */}
-                  <div className="flex gap-4">
+                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                     <button
                       type="button"
                       onClick={() => setSearchType('email')}
@@ -486,8 +486,8 @@ export default function Register() {
                     </button>
                   </div>
 
-                  {/* Search Input */}
-                  <div className="flex gap-4">
+                  {/* Search Input - Responsive Layout */}
+                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                     <input
                       type={searchType === 'email' ? 'email' : 'tel'}
                       value={searchQuery}
@@ -500,7 +500,7 @@ export default function Register() {
                       type="button"
                       onClick={handleSearch}
                       disabled={searching}
-                      className="px-8 py-4 bg-gradient-to-r from-maroon-800 to-maroon-700 text-white rounded-xl font-bold hover:from-maroon-700 hover:to-maroon-600 transition-all disabled:opacity-50 flex items-center gap-3 shadow-lg transform hover:scale-105 active:scale-95"
+                      className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-maroon-800 to-maroon-700 text-white rounded-xl font-bold hover:from-maroon-700 hover:to-maroon-600 transition-all disabled:opacity-50 flex items-center justify-center gap-3 shadow-lg transform hover:scale-105 active:scale-95"
                     >
                       {searching ? (
                         <>
