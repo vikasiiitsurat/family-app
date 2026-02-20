@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   UserPlus, CheckCircle, Edit3, Search, RefreshCw,
   Linkedin, Instagram, MessageCircle, Sparkles, Camera, X,
-  Heart, Users, ChevronDown
+  Heart, Users, ChevronDown, Facebook
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import Confetti from '../components/Confetti';
@@ -13,6 +13,7 @@ const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
 type TabType = 'register' | 'update';
 type SearchType = 'email' | 'phone' | 'name';
+type Gender = 'male' | 'female' | '';
 
 interface MemberRecord {
   id?: string;
@@ -22,10 +23,12 @@ interface MemberRecord {
   phone: string;
   qualification: string;
   current_status: string;
+  gender?: string;
   anniversary?: string;
   linkedin?: string;
   whatsapp?: string;
   instagram?: string;
+  facebook?: string;
   profile_photo?: string;
   fathers_name?: string;
   mothers_name?: string;
@@ -41,10 +44,12 @@ export default function Register() {
     phone: '',
     qualification: '',
     currentStatus: '',
+    gender: '' as Gender,
     anniversary: '',
     linkedin: '',
     whatsapp: '',
     instagram: '',
+    facebook: '',
     profilePhoto: '',
     fathersName: '',
     mothersName: '',
@@ -75,10 +80,18 @@ export default function Register() {
 
   const emptyForm = {
     name: '', email: '', dob: '', phone: '', qualification: '',
-    currentStatus: '', anniversary: '', linkedin: '', whatsapp: '',
-    instagram: '', profilePhoto: '', fathersName: '', mothersName: '',
-    spouseName: '', isMarried: false,
+    currentStatus: '', gender: '' as Gender, anniversary: '', linkedin: '',
+    whatsapp: '', instagram: '', facebook: '', profilePhoto: '',
+    fathersName: '', mothersName: '', spouseName: '', isMarried: false,
   };
+
+  // --- Smart family field visibility logic ---
+  // If female AND married → only show spouse name (no parents)
+  // If female AND single → show parents names normally
+  // All other genders → always show parents names
+  const isFemaleMarried = formData.gender === 'female' && formData.isMarried;
+  const showParentsFields = !isFemaleMarried;
+  const showSpouseFields = formData.isMarried;
 
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
@@ -136,10 +149,12 @@ export default function Register() {
       phone: data.phone || '',
       qualification: data.qualification || '',
       currentStatus: data.current_status || '',
+      gender: (data.gender || '') as Gender,
       anniversary: data.anniversary || '',
       linkedin: data.linkedin || '',
       whatsapp: data.whatsapp || '',
       instagram: data.instagram || '',
+      facebook: data.facebook || '',
       profilePhoto: data.profile_photo || '',
       fathersName: data.fathers_name || '',
       mothersName: data.mothers_name || '',
@@ -164,7 +179,6 @@ export default function Register() {
 
     try {
       if (searchType === 'name') {
-        // Name search — may return multiple
         const { data, error: searchError } = await supabase
           .from('members')
           .select('*')
@@ -206,8 +220,19 @@ export default function Register() {
     setError('');
     setLoading(true);
 
+    // Validations
+    if (!formData.gender) {
+      setError('Please select your gender.');
+      setLoading(false);
+      return;
+    }
     if (!/^[0-9]{10}$/.test(formData.phone)) {
       setError('Phone number must be exactly 10 digits.');
+      setLoading(false);
+      return;
+    }
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      setError('Please enter a valid email address.');
       setLoading(false);
       return;
     }
@@ -226,6 +251,14 @@ export default function Register() {
       setLoading(false);
       return;
     }
+    // Parents required only if NOT (female + married)
+    if (showParentsFields) {
+      if (!formData.fathersName.trim() || !formData.mothersName.trim()) {
+        setError("Please enter both father's and mother's name.");
+        setLoading(false);
+        return;
+      }
+    }
 
     try {
       let photoUrl = formData.profilePhoto;
@@ -241,25 +274,32 @@ export default function Register() {
 
       const payload = {
         name: formData.name,
-        email: formData.email,
+        email: formData.email || null,
         dob: formData.dob,
         phone: formData.phone,
         qualification: formData.qualification,
         current_status: formData.currentStatus,
+        gender: formData.gender,
         anniversary: formData.isMarried && formData.anniversary ? formData.anniversary : null,
         linkedin: formData.linkedin || null,
         whatsapp: formData.whatsapp || null,
         instagram: formData.instagram || null,
+        facebook: formData.facebook || null,
         profile_photo: photoUrl || null,
-        fathers_name: formData.fathersName || null,
-        mothers_name: formData.mothersName || null,
+        // Only save parent names if they were shown/required
+        fathers_name: showParentsFields ? (formData.fathersName || null) : null,
+        mothers_name: showParentsFields ? (formData.mothersName || null) : null,
         spouse_name: formData.isMarried ? formData.spouseName || null : null,
       };
 
       if (activeTab === 'register') {
         const { error: insertError } = await supabase.from('members').insert([{ ...payload, timezone }]);
         if (insertError) {
-          setError(insertError.code === '23505' ? 'This email is already registered!' : 'Registration failed. Please try again.');
+          setError(
+            insertError.code === '23505'
+              ? 'This email or phone is already registered!'
+              : 'Registration failed. Please try again.'
+          );
           setLoading(false);
           return;
         }
@@ -267,7 +307,11 @@ export default function Register() {
       } else {
         const { error: updateError } = await supabase.from('members').update(payload).eq('email', originalEmail);
         if (updateError) {
-          setError(updateError.code === '23505' ? 'This email is already taken by another user!' : 'Update failed. Please try again.');
+          setError(
+            updateError.code === '23505'
+              ? 'This email is already taken by another user!'
+              : 'Update failed. Please try again.'
+          );
           setLoading(false);
           return;
         }
@@ -300,6 +344,11 @@ export default function Register() {
     { type: 'email', label: 'Email', emoji: '📧' },
     { type: 'phone', label: 'Phone', emoji: '📱' },
     { type: 'name', label: 'Name', emoji: '👤' },
+  ];
+
+  const genderOptions: { value: Gender; label: string; emoji: string }[] = [
+    { value: 'male', label: 'Male', emoji: '👨' },
+    { value: 'female', label: 'Female', emoji: '👩' },
   ];
 
   return (
@@ -385,7 +434,6 @@ export default function Register() {
                   Find Your Profile
                 </h3>
 
-                {/* Search type — 3 buttons */}
                 <div className="grid grid-cols-3 gap-3 mb-5">
                   {searchTypeConfig.map(({ type, label, emoji }) => (
                     <button
@@ -403,7 +451,6 @@ export default function Register() {
                   ))}
                 </div>
 
-                {/* Search input */}
                 <div className="flex flex-col sm:flex-row gap-3">
                   <input
                     type={searchType === 'email' ? 'email' : searchType === 'phone' ? 'tel' : 'text'}
@@ -427,7 +474,6 @@ export default function Register() {
                   </button>
                 </div>
 
-                {/* Multiple results picker */}
                 {multipleResults.length > 1 && (
                   <div className="mt-6">
                     <p className="text-maroon-800 font-bold mb-3 text-sm">
@@ -532,9 +578,48 @@ export default function Register() {
                   </h3>
                   <div className="space-y-6">
                     <InputField label="Full Name" name="name" value={formData.name} onChange={handleChange} icon="✨" required />
-                    <InputField label="Email Address" name="email" type="email" value={formData.email} onChange={handleChange} icon="📧" required />
+
+                    {/* Email — optional */}
+                    <div>
+                      <label className="block text-gray-800 font-bold mb-3 flex items-center gap-2">
+                        <span>📧</span> Email Address
+                        <span className="ml-1 text-xs font-normal text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Optional</span>
+                      </label>
+                      <input
+                        type="email"
+                        name="email"
+                        value={formData.email}
+                        onChange={handleChange}
+                        placeholder="your@email.com"
+                        className="w-full px-5 py-4 border-2 border-gray-300 rounded-xl focus:border-maroon-800 focus:ring-4 focus:ring-maroon-200 transition-all text-lg shadow-sm hover:border-maroon-400"
+                      />
+                    </div>
+
                     <InputField label="Phone Number" name="phone" type="tel" value={formData.phone} onChange={handleChange} placeholder="10 digit number" maxLength={10} icon="📱" required />
                     <DateField label="Date of Birth (Real, not Aadhaar)" name="dob" value={formData.dob} setFormData={setFormData} icon="🎂" required />
+
+                    {/* Gender selector */}
+                    <div>
+                      <label className="block text-gray-800 font-bold mb-3 flex items-center gap-2">
+                        <span>🧬</span> Gender <span className="text-red-500">*</span>
+                      </label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {genderOptions.map(({ value, label, emoji }) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => setFormData(prev => ({ ...prev, gender: value }))}
+                            className={`py-3 px-4 rounded-xl font-bold transition-all duration-300 transform hover:scale-105 text-sm ${
+                              formData.gender === value
+                                ? 'bg-gradient-to-r from-maroon-800 to-maroon-700 text-white shadow-xl scale-105'
+                                : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-maroon-400 hover:shadow-lg'
+                            }`}
+                          >
+                            {emoji} {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -546,13 +631,7 @@ export default function Register() {
                   <p className="text-gray-500 text-sm mb-5">Tell us a bit about your family 🏡</p>
 
                   <div className="space-y-6">
-                    {/* Father & Mother side by side on larger screens */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                      <InputField label="Father's Name" name="fathersName" value={formData.fathersName} onChange={handleChange} icon="👨" required />
-                      <InputField label="Mother's Name" name="mothersName" value={formData.mothersName} onChange={handleChange} icon="👩" required />
-                    </div>
-
-                    {/* Married toggle */}
+                    {/* Marital Status toggle */}
                     <div>
                       <label className="block text-gray-800 font-bold mb-3 flex items-center gap-2">
                         <Heart size={18} className="text-rose-500" /> Marital Status <span className="text-red-500">*</span>
@@ -583,9 +662,9 @@ export default function Register() {
                       </div>
                     </div>
 
-                    {/* Spouse fields — shown only if married */}
-                    {formData.isMarried && (
-                      <div className="space-y-5 p-5 bg-white/70 rounded-2xl border-2 border-rose-200 shadow-sm animate-fadeIn">
+                    {/* Spouse fields — shown when married */}
+                    {showSpouseFields && (
+                      <div className="space-y-5 p-5 bg-white/70 rounded-2xl border-2 border-rose-200 shadow-sm">
                         <div className="flex items-center gap-2 mb-1">
                           <Heart className="text-rose-500 animate-pulse" size={18} />
                           <span className="text-rose-700 font-semibold text-sm">Married details</span>
@@ -606,6 +685,23 @@ export default function Register() {
                           setFormData={setFormData}
                           icon="💝"
                         />
+                      </div>
+                    )}
+
+                    {/* Parents fields — hidden for married females */}
+                    {showParentsFields ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        <InputField label="Father's Name" name="fathersName" value={formData.fathersName} onChange={handleChange} icon="👨" required />
+                        <InputField label="Mother's Name" name="mothersName" value={formData.mothersName} onChange={handleChange} icon="👩" required />
+                      </div>
+                    ) : (
+                      /* Friendly note for married females */
+                      <div className="flex items-start gap-3 bg-rose-50 border border-rose-200 rounded-xl px-5 py-4 text-sm text-rose-700">
+                        <span className="text-xl leading-none">💐</span>
+                        <p>
+                          As a married woman, you're not required to fill in your parents' names.
+                          Feel free to add them later if you'd like!
+                        </p>
                       </div>
                     )}
                   </div>
@@ -655,10 +751,12 @@ export default function Register() {
                   <h3 className="text-xl font-bold text-maroon-800 mb-5 flex items-center gap-2">
                     🌐 Social & Additional Information
                   </h3>
+                  <p className="text-xs text-gray-400 mb-5">All fields below are optional</p>
                   <div className="space-y-6">
                     <InputField label="LinkedIn Profile URL" name="linkedin" type="url" value={formData.linkedin} onChange={handleChange} placeholder="https://linkedin.com/in/your-profile" icon={<Linkedin size={18} className="text-blue-600" />} />
                     <InputField label="WhatsApp Number" name="whatsapp" type="tel" value={formData.whatsapp} onChange={handleChange} placeholder="10 digit number" maxLength={10} icon={<MessageCircle size={18} className="text-green-600" />} />
                     <InputField label="Instagram ID" name="instagram" value={formData.instagram} onChange={handleChange} placeholder="your_instagram_handle" maxLength={30} icon={<Instagram size={18} className="text-pink-600" />} />
+                    <InputField label="Facebook Profile URL or Username" name="facebook" value={formData.facebook} onChange={handleChange} placeholder="https://facebook.com/yourprofile" icon={<Facebook size={18} className="text-blue-700" />} />
                   </div>
                 </div>
 

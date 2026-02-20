@@ -23,41 +23,26 @@ interface Member {
   timezone?: string | null;
 }
 
-// ─── GHOST MEMBER (for unregistered parents) ──────────────────────────────────
-interface GhostMember extends Member {
-  isGhost: true;
-}
-
 // ─── PAGE PROP ────────────────────────────────────────────────────────────────
 interface HomeProps {
   onNavigate: (page: 'register' | 'members' | 'privacy') => void;
 }
 
-// ─── FUZZY / UTILS ────────────────────────────────────────────────────────────
-function levenshtein(a: string, b: string): number {
-  const m = a.length, n = b.length;
-  const dp: number[][] = Array.from({ length: m + 1 }, (_, i) =>
-    Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
-  );
-  for (let i = 1; i <= m; i++)
-    for (let j = 1; j <= n; j++)
-      dp[i][j] = a[i - 1] === b[j - 1]
-        ? dp[i - 1][j - 1]
-        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
-  return dp[m][n];
+// ─── STRICT NAME MATCHING ─────────────────────────────────────────────────────
+// Only normalize: lowercase + collapse multiple spaces + trim
+function normalizeName(name: string): string {
+  return name.toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-function nameSimilarity(a: string, b: string): number {
-  const norm = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
-  const na = norm(a), nb = norm(b);
-  if (na === nb) return 1;
-  return 1 - levenshtein(na, nb) / Math.max(na.length, nb.length);
+function namesMatch(a: string, b: string): boolean {
+  return normalizeName(a) === normalizeName(b);
 }
 
+// ─── DEDUPLICATE: only exact (case-insensitive, space-normalized) matches ─────
 function deduplicateMembers(members: Member[]): Member[] {
   const merged: Member[] = [];
   for (const m of members) {
-    const match = merged.find(e => nameSimilarity(m.name, e.name) >= 0.82);
+    const match = merged.find(e => namesMatch(m.name, e.name));
     if (match) {
       (Object.keys(m) as (keyof Member)[]).forEach(k => {
         if (m[k] != null && m[k] !== '' && !match[k]) {
@@ -458,350 +443,446 @@ function MonthSection({ members }: { members: Member[] }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// SECTION 4 — FAMILY TREE (ENHANCED)
+// SECTION 4 — FAMILY TREE (COUPLE-UNIT BASED)
 // ════════════════════════════════════════════════════════════════════════════════
 
+interface CoupleUnit {
+  key: string;
+  father?: Member;
+  fatherIsGhost: boolean;
+  mother?: Member;
+  motherIsGhost: boolean;
+  children: Member[];
+}
+
 interface TreeNode {
-  member: Member;
-  isGhost?: boolean;            // true = parent not registered
-  spouse?: { member: Member; isGhost?: boolean };
+  father?: Member;
+  fatherIsGhost: boolean;
+  mother?: Member;
+  motherIsGhost: boolean;
   children: TreeNode[];
 }
 
-const GHOST_COUNTER = { val: 0 };
-
-function makeGhost(name: string): Member {
-  GHOST_COUNTER.val -= 1;
-  return {
-    id: `ghost_${GHOST_COUNTER.val}`,
-    name,
-    email: '',
-    dob: '1970-01-01',
-    phone: '',
-    qualification: '',
-    current_status: 'Not Registered',
-    profile_photo: null,
-    fathers_name: null,
-    mothers_name: null,
-    spouse_name: null,
-    anniversary: null,
-  };
-}
-
+// ── buildTree() ────────────────────────────────────────────────────────────────
 function buildTree(members: Member[]): TreeNode[] {
-  GHOST_COUNTER.val = 0;
-
-  // ── Step 1: Spouse matching ──────────────────────────────────────────────────
-  const spouseMap = new Map<string, string>(); // id → partner id
-  members.forEach(m => {
-    if (m.spouse_name) {
-      const sp = members.find(
-        s => s.id !== m.id && nameSimilarity(s.name, m.spouse_name!) >= 0.75
-      );
-      if (sp && !spouseMap.has(m.id) && !spouseMap.has(sp.id)) {
-        spouseMap.set(m.id, sp.id);
-        spouseMap.set(sp.id, m.id);
-      }
-    }
-  });
-
-  // ── Step 2: Build parent→children map ───────────────────────────────────────
-  // Ghost parents keyed by normalised name
+  // ── Ghost registry ──────────────────────────────────────────────────────────
+  let ghostCounter = 0;
   const ghostByName = new Map<string, Member>();
-  const getOrMakeGhost = (name: string): Member => {
-    const key = name.toLowerCase().trim();
-    if (!ghostByName.has(key)) ghostByName.set(key, makeGhost(name));
+
+  const makeGhost = (name: string): Member => {
+    // Key by normalized name so "ved" and "Ved" → same ghost
+    const key = normalizeName(name);
+    if (!ghostByName.has(key)) {
+      ghostCounter--;
+      ghostByName.set(key, {
+        id: `ghost_${ghostCounter}`,
+        name: name.trim(),
+        email: '',
+        dob: '1970-01-01',
+        phone: '',
+        qualification: '',
+        current_status: 'Not Registered',
+        profile_photo: null,
+        fathers_name: null,
+        mothers_name: null,
+        spouse_name: null,
+        anniversary: null,
+      });
+    }
     return ghostByName.get(key)!;
   };
 
-  const childrenOf = new Map<string, Member[]>(); // parentId → children
-  const hasRegisteredParent = new Set<string>();   // child ids with real parent
-  const hasAnyParent = new Set<string>();          // child ids with any parent (real or ghost)
+  // ── Member lookup: strict case-insensitive + space-normalized ───────────────
+  const findReal = (name: string, excludeId?: string): Member | undefined =>
+    members.find(m => m.id !== excludeId && namesMatch(m.name, name));
 
-  members.forEach(child => {
-    // Try fathers_name
-    const fatherNames = [child.fathers_name, child.mothers_name].filter(Boolean) as string[];
-    fatherNames.forEach(parentName => {
-      const realParent = members.find(
-        p => p.id !== child.id && nameSimilarity(p.name, parentName) >= 0.8
-      );
-      if (realParent) {
-        const kids = childrenOf.get(realParent.id) || [];
-        if (!kids.find(k => k.id === child.id)) kids.push(child);
-        childrenOf.set(realParent.id, kids);
-        hasRegisteredParent.add(child.id);
-        hasAnyParent.add(child.id);
-      } else {
-        // Create/reuse ghost parent
-        const ghost = getOrMakeGhost(parentName);
-        const kids = childrenOf.get(ghost.id) || [];
-        if (!kids.find(k => k.id === child.id)) kids.push(child);
-        childrenOf.set(ghost.id, kids);
-        hasAnyParent.add(child.id);
-      }
-    });
-  });
+  const resolve = (name: string, excludeId?: string): { member: Member; isGhost: boolean } => {
+    const real = findReal(name, excludeId);
+    return real
+      ? { member: real, isGhost: false }
+      : { member: makeGhost(name), isGhost: true };
+  };
 
-  // ── Step 3: Build node recursively ──────────────────────────────────────────
-  const visited = new Set<string>();
-  const buildNode = (m: Member, isGhost = false): TreeNode => {
-    visited.add(m.id);
-    const spouseId = spouseMap.get(m.id);
-    const spouseMember = spouseId ? members.find(s => s.id === spouseId) : undefined;
-    // Check if there's a ghost spouse
-    let ghostSpouse: Member | undefined;
-    if (!spouseMember && m.spouse_name) {
-      ghostSpouse = getOrMakeGhost(m.spouse_name);
+  // ── Couple key: normalize both names so spacing/case never splits a couple ──
+  const makeCoupleKey = (a?: string, b?: string): string =>
+    [a, b]
+      .filter(Boolean)
+      .map(s => normalizeName(s!))
+      .sort()
+      .join('__');
+
+  // ── Couple map ──────────────────────────────────────────────────────────────
+  const couples = new Map<string, CoupleUnit>();
+
+  const getOrCreateCouple = (
+    fatherName?: string,
+    motherName?: string,
+    fallbackFatherId?: string,
+  ): CoupleUnit => {
+    const key = fatherName || motherName
+      ? makeCoupleKey(fatherName, motherName)
+      : `single__${fallbackFatherId}`;
+
+    if (couples.has(key)) return couples.get(key)!;
+
+    const unit: CoupleUnit = {
+      key,
+      father: undefined,
+      fatherIsGhost: false,
+      mother: undefined,
+      motherIsGhost: false,
+      children: [],
+    };
+
+    if (fatherName) {
+      const r = resolve(fatherName);
+      unit.father = r.member;
+      unit.fatherIsGhost = r.isGhost;
+    }
+    if (motherName) {
+      const r = resolve(motherName);
+      unit.mother = r.member;
+      unit.motherIsGhost = r.isGhost;
     }
 
-    const kids = (childrenOf.get(m.id) || []).filter(k => !visited.has(k.id));
-    // Also pull kids from ghost spouse if any
-    const spouseKids = ghostSpouse
-      ? (childrenOf.get(ghostSpouse.id) || []).filter(k => !visited.has(k.id))
-      : spouseId
-      ? (childrenOf.get(spouseId) || []).filter(k => !visited.has(k.id))
-      : [];
+    couples.set(key, unit);
+    return unit;
+  };
 
-    const allKids = [...kids, ...spouseKids].filter(
-      (k, idx, arr) => arr.findIndex(x => x.id === k.id) === idx
-    );
+  // ── Step 1: assign every member to their parents' CoupleUnit ────────────────
+  const childOfKey = new Map<string, string>();
+
+  members.forEach(child => {
+    const fn = child.fathers_name?.trim() || undefined;
+    const mn = child.mothers_name?.trim() || undefined;
+    if (!fn && !mn) return;
+
+    const couple = getOrCreateCouple(fn, mn);
+    if (!couple.children.find(c => c.id === child.id)) {
+      couple.children.push(child);
+    }
+    childOfKey.set(child.id, couple.key);
+  });
+
+  // ── Step 2: build reverse index — which couple does each member PARENT? ─────
+  const parentCoupleKey = new Map<string, string>();
+
+  couples.forEach(c => {
+    if (c.father && !c.fatherIsGhost) parentCoupleKey.set(c.father.id, c.key);
+    if (c.mother && !c.motherIsGhost) parentCoupleKey.set(c.mother.id, c.key);
+  });
+
+  // ── Step 3: self-couples for members not yet in any couple as parent ─────────
+  const processedAsParent = new Set<string>(parentCoupleKey.keys());
+
+  members.forEach(m => {
+    if (processedAsParent.has(m.id)) return;
+
+    const spouseName = m.spouse_name?.trim() || undefined;
+
+    if (spouseName) {
+      // Strict name match for spouse
+      const spReal = members.find(
+        s => s.id !== m.id && namesMatch(s.name, spouseName),
+      );
+
+      if (spReal) {
+        const key = makeCoupleKey(m.name, spReal.name);
+        if (!couples.has(key)) {
+          couples.set(key, {
+            key,
+            father: m,
+            fatherIsGhost: false,
+            mother: spReal,
+            motherIsGhost: false,
+            children: [],
+          });
+        }
+        if (!parentCoupleKey.has(m.id)) parentCoupleKey.set(m.id, key);
+        if (!parentCoupleKey.has(spReal.id)) parentCoupleKey.set(spReal.id, key);
+        processedAsParent.add(m.id);
+        processedAsParent.add(spReal.id);
+      } else {
+        // Spouse unregistered → ghost
+        const key = makeCoupleKey(m.name, spouseName);
+        if (!couples.has(key)) {
+          const ghost = makeGhost(spouseName);
+          couples.set(key, {
+            key,
+            father: m,
+            fatherIsGhost: false,
+            mother: ghost,
+            motherIsGhost: true,
+            children: [],
+          });
+        }
+        parentCoupleKey.set(m.id, key);
+        processedAsParent.add(m.id);
+      }
+    } else {
+      // No spouse — single-person node
+      const key = `single__${m.id}`;
+      if (!couples.has(key)) {
+        couples.set(key, {
+          key,
+          father: m,
+          fatherIsGhost: false,
+          mother: undefined,
+          motherIsGhost: false,
+          children: [],
+        });
+      }
+      parentCoupleKey.set(m.id, key);
+      processedAsParent.add(m.id);
+    }
+  });
+
+  // ── Step 4: root detection ───────────────────────────────────────────────────
+  const isChildMember = new Set<string>(childOfKey.keys());
+
+  const rootCouples: CoupleUnit[] = [];
+  const seenRootKeys = new Set<string>();
+
+  couples.forEach(c => {
+    const fId = c.father?.id;
+    const mId = c.mother?.id;
+    const fIsChild = fId && !c.fatherIsGhost && isChildMember.has(fId);
+    const mIsChild = mId && !c.motherIsGhost && isChildMember.has(mId);
+    if (!fIsChild && !mIsChild && !seenRootKeys.has(c.key)) {
+      seenRootKeys.add(c.key);
+      rootCouples.push(c);
+    }
+  });
+
+  // ── Step 5: recursive TreeNode builder ──────────────────────────────────────
+  const visited = new Set<string>();
+
+  const buildNode = (couple: CoupleUnit): TreeNode => {
+    visited.add(couple.key);
+
+    const childNodes: TreeNode[] = [];
+
+    for (const child of couple.children) {
+      const ck = parentCoupleKey.get(child.id);
+      if (ck && !visited.has(ck)) {
+        const childCouple = couples.get(ck);
+        if (childCouple) {
+          childNodes.push(buildNode(childCouple));
+        }
+      } else if (!ck) {
+        const singleKey = `single__${child.id}`;
+        if (!visited.has(singleKey)) {
+          const singleCouple: CoupleUnit = {
+            key: singleKey,
+            father: child,
+            fatherIsGhost: false,
+            mother: undefined,
+            motherIsGhost: false,
+            children: [],
+          };
+          childNodes.push(buildNode(singleCouple));
+        }
+      }
+    }
 
     return {
-      member: m,
-      isGhost,
-      spouse: spouseMember
-        ? { member: spouseMember, isGhost: false }
-        : ghostSpouse
-        ? { member: ghostSpouse, isGhost: true }
-        : undefined,
-      children: allKids.map(k => buildNode(k, false)),
+      father: couple.father,
+      fatherIsGhost: couple.fatherIsGhost,
+      mother: couple.mother,
+      motherIsGhost: couple.motherIsGhost,
+      children: childNodes,
     };
   };
 
-  // ── Step 4: Determine roots ──────────────────────────────────────────────────
-  // Roots = real members with no identified parent (registered or ghost)
-  // + ghost parents who ARE parents
-  const spouseIds = new Set(spouseMap.values());
-
-  const realRoots = members.filter(m =>
-    !hasAnyParent.has(m.id) &&
-    // don't root a spouse — their spouse-node includes them
-    !Array.from(spouseMap.entries()).some(([primary, spId]) =>
-      spId === m.id && !hasAnyParent.has(primary)
-    )
-  );
-
-  // Ghost roots = ghost parents not themselves a child
-  const ghostRoots: Member[] = [...ghostByName.values()].filter(
-    g => !hasAnyParent.has(g.id)
-  );
-
-  const roots: TreeNode[] = [];
-  const addedIds = new Set<string>();
-
-  [...ghostRoots, ...realRoots].forEach(m => {
-    if (addedIds.has(m.id)) return;
-    const isGhost = m.id.startsWith('ghost_');
-    // Skip spouses — they'll be attached to their partner node
-    const partnerKey = spouseMap.get(m.id);
-    if (partnerKey && !isGhost) {
-      const partner = members.find(x => x.id === partnerKey);
-      if (partner && !hasAnyParent.has(partner.id) && !addedIds.has(partner.id)) {
-        // Let the one with more children be the primary
-        const mKids = (childrenOf.get(m.id) || []).length;
-        const pKids = (childrenOf.get(partner.id) || []).length;
-        const primary = mKids >= pKids ? m : partner;
-        const secondary = primary.id === m.id ? partner : m;
-        addedIds.add(primary.id);
-        addedIds.add(secondary.id);
-        visited.add(secondary.id);
-        roots.push(buildNode(primary, false));
-        return;
-      }
-    }
-    if (!visited.has(m.id)) {
-      addedIds.add(m.id);
-      roots.push(buildNode(m, isGhost));
-    }
-  });
-
-  return roots;
+  return rootCouples
+    .filter(c => !visited.has(c.key))
+    .map(c => buildNode(c));
 }
 
-// ── Tree Node Card ─────────────────────────────────────────────────────────────
+// ── Tooltip ────────────────────────────────────────────────────────────────────
+function MemberTooltip({
+  member,
+  isGhost,
+  show,
+  label,
+}: {
+  member: Member;
+  isGhost: boolean;
+  show: boolean;
+  label: string;
+}) {
+  return (
+    <AnimatePresence>
+      {show && (
+        <motion.div
+          initial={{ opacity: 0, y: 8, scale: 0.92 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 8, scale: 0.92 }}
+          transition={{ duration: 0.18 }}
+          className="absolute z-50 bottom-full mb-3 left-1/2 -translate-x-1/2 bg-white rounded-2xl shadow-2xl border border-orange-100 p-4 w-64"
+          style={{ minWidth: 220 }}
+        >
+          <div className="flex items-center gap-3 mb-3">
+            <Avatar member={member} size={40} ghost={isGhost} />
+            <div>
+              <p className="font-extrabold text-gray-900 text-sm leading-tight">{member.name}</p>
+              <p className={`text-xs font-semibold ${isGhost ? 'text-orange-400 italic' : 'text-orange-500'}`}>
+                {isGhost ? '⚠️ Not yet registered' : (member.current_status || label)}
+              </p>
+            </div>
+          </div>
+          {!isGhost ? (
+            <div className="space-y-1 text-xs text-gray-600">
+              <p>🎂 {formatShortDate(member.dob)} · Age {getAge(member.dob)}</p>
+              {member.anniversary && <p>💍 {formatShortDate(member.anniversary)} · {getYearsMarried(member.anniversary)}y</p>}
+              {member.spouse_name && <p>💕 Spouse: {member.spouse_name}</p>}
+              {member.fathers_name && <p>👨 {member.fathers_name}</p>}
+              {member.mothers_name && <p>👩 {member.mothers_name}</p>}
+              {member.email && <p className="truncate">📧 {member.email}</p>}
+              {member.phone && <p>📱 {member.phone}</p>}
+              {member.qualification && <p>🎓 {member.qualification}</p>}
+            </div>
+          ) : (
+            <p className="text-xs text-orange-400 italic">
+              Referenced by family members but not yet registered.
+            </p>
+          )}
+          <div className="absolute top-full left-1/2 -translate-x-1/2 w-3 h-3 bg-white border-b border-r border-orange-100 rotate-45 -mt-1.5" />
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// ── Member bubble ──────────────────────────────────────────────────────────────
+function MemberBubble({
+  member,
+  isGhost,
+  depth,
+  hasChildren,
+  expanded,
+  onToggle,
+  label,
+}: {
+  member: Member;
+  isGhost: boolean;
+  depth: number;
+  hasChildren: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+  label: string;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const hasCelebration =
+    !isGhost && (isToday(member.dob) || (member.anniversary && isToday(member.anniversary)));
+
+  return (
+    <motion.div
+      className="relative flex flex-col items-center"
+      initial={{ opacity: 0, scale: 0.6 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ delay: depth * 0.08, type: 'spring', stiffness: 180 }}
+      onHoverStart={() => setHovered(true)}
+      onHoverEnd={() => setHovered(false)}
+    >
+      {hasCelebration && (
+        <motion.div
+          className="absolute inset-0 rounded-full bg-orange-400/40 blur-md"
+          animate={{ scale: [1, 1.5, 1], opacity: [0.4, 0.9, 0.4] }}
+          transition={{ duration: 1.8, repeat: Infinity }}
+        />
+      )}
+
+      <div
+        className="relative z-10 flex flex-col items-center gap-1 cursor-pointer"
+        onClick={hasChildren ? onToggle : undefined}
+      >
+        <div className="relative">
+          <Avatar member={member} size={60} ring ghost={isGhost} />
+          {isGhost && (
+            <span className="absolute -bottom-1 -right-1 text-[10px] bg-orange-100 text-orange-600 rounded-full px-1 font-bold border border-orange-200">
+              ?
+            </span>
+          )}
+        </div>
+        <p className={`text-xs font-bold max-w-[72px] text-center leading-tight ${isGhost ? 'text-orange-400 italic' : 'text-gray-700'}`}>
+          {member.name.split(' ')[0]}
+        </p>
+        {isGhost && <p className="text-[9px] text-orange-300 italic">not registered</p>}
+        {hasChildren && (
+          <span className="text-[10px] bg-orange-100 text-orange-600 rounded-full px-2 py-0.5 font-bold cursor-pointer">
+            {expanded ? '▲' : `▼`}
+          </span>
+        )}
+      </div>
+
+      <MemberTooltip member={member} isGhost={isGhost} show={hovered} label={label} />
+    </motion.div>
+  );
+}
+
+// ── TreeNodeCard ───────────────────────────────────────────────────────────────
 function TreeNodeCard({ node, depth }: { node: TreeNode; depth: number }) {
   const [expanded, setExpanded] = useState(true);
-  const [hovered, setHovered] = useState(false);
-  const [spouseHovered, setSpouseHovered] = useState(false);
-  const m = node.member;
-  const isGhost = node.isGhost ?? false;
-  const hasCelebration = !isGhost && (isToday(m.dob) || (m.anniversary && isToday(m.anniversary)));
 
-  const cardWidth = 80; // px per node (avatar + label)
+  const hasBothParents = !!node.father && !!node.mother;
+  const hasChildren = node.children.length > 0;
 
   return (
     <div className="flex flex-col items-center select-none">
       {/* ── Couple row ── */}
       <div className="flex items-end gap-2">
-        {/* Main member */}
-        <motion.div
-          className="relative flex flex-col items-center"
-          initial={{ opacity: 0, scale: 0.6 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: depth * 0.08, type: 'spring', stiffness: 180 }}
-          onHoverStart={() => setHovered(true)}
-          onHoverEnd={() => setHovered(false)}
-        >
-          {hasCelebration && (
-            <motion.div
-              className="absolute inset-0 rounded-full bg-orange-400/40 blur-md"
-              animate={{ scale: [1, 1.5, 1], opacity: [0.4, 0.9, 0.4] }}
-              transition={{ duration: 1.8, repeat: Infinity }}
-            />
-          )}
+        {node.father && (
+          <MemberBubble
+            member={node.father}
+            isGhost={node.fatherIsGhost}
+            depth={depth}
+            hasChildren={hasChildren && !hasBothParents}
+            expanded={expanded}
+            onToggle={() => setExpanded(e => !e)}
+            label="Family Member"
+          />
+        )}
 
-          <div
-            className="relative z-10 flex flex-col items-center gap-1 cursor-pointer"
-            onClick={() => node.children.length > 0 && setExpanded(e => !e)}
-          >
-            <div className="relative">
-              <Avatar member={m} size={60} ring ghost={isGhost} />
-              {isGhost && (
-                <span className="absolute -bottom-1 -right-1 text-[10px] bg-orange-100 text-orange-600 rounded-full px-1 font-bold border border-orange-200">
-                  ?
-                </span>
-              )}
-            </div>
-            <p className={`text-xs font-bold max-w-[72px] text-center leading-tight ${isGhost ? 'text-orange-400 italic' : 'text-gray-700'}`}>
-              {m.name.split(' ')[0]}
-            </p>
-            {isGhost && <p className="text-[9px] text-orange-300 italic">not registered</p>}
-            {node.children.length > 0 && (
-              <span className="text-[10px] bg-orange-100 text-orange-600 rounded-full px-2 py-0.5 font-bold cursor-pointer">
-                {expanded ? '▲' : `▼ ${node.children.length}`}
-              </span>
-            )}
-          </div>
-
-          {/* Hover tooltip for main member */}
-          <AnimatePresence>
-            {hovered && (
-              <motion.div
-                initial={{ opacity: 0, y: 8, scale: 0.92 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 8, scale: 0.92 }}
-                transition={{ duration: 0.18 }}
-                className="absolute z-50 bottom-full mb-3 left-1/2 -translate-x-1/2 bg-white rounded-2xl shadow-2xl border border-orange-100 p-4 w-64"
-                style={{ minWidth: 220 }}
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <Avatar member={m} size={40} ghost={isGhost} />
-                  <div>
-                    <p className="font-extrabold text-gray-900 text-sm leading-tight">{m.name}</p>
-                    <p className={`text-xs font-semibold ${isGhost ? 'text-orange-400 italic' : 'text-orange-500'}`}>
-                      {isGhost ? '⚠️ Not yet registered' : (m.current_status || 'Family Member')}
-                    </p>
-                  </div>
-                </div>
-                {!isGhost ? (
-                  <div className="space-y-1 text-xs text-gray-600">
-                    <p>🎂 {formatShortDate(m.dob)} · Age {getAge(m.dob)}</p>
-                    {m.anniversary && <p>💍 {formatShortDate(m.anniversary)} · {getYearsMarried(m.anniversary)}y</p>}
-                    {m.spouse_name && <p>💕 Spouse: {m.spouse_name}</p>}
-                    {m.fathers_name && <p>👨 {m.fathers_name}</p>}
-                    {m.mothers_name && <p>👩 {m.mothers_name}</p>}
-                    {m.email && <p className="truncate">📧 {m.email}</p>}
-                    {m.phone && <p>📱 {m.phone}</p>}
-                    {m.qualification && <p>🎓 {m.qualification}</p>}
-                  </div>
-                ) : (
-                  <p className="text-xs text-orange-400 italic">
-                    This parent was referenced by family members but hasn't registered yet.
-                  </p>
-                )}
-                <div className="absolute top-full left-1/2 -translate-x-1/2 w-3 h-3 bg-white border-b border-r border-orange-100 rotate-45 -mt-1.5" />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.div>
-
-        {/* Spouse if present */}
-        {node.spouse && (
-          <>
-            <div className="flex items-center mb-8">
+        {hasBothParents && (
+          <div className="flex flex-col items-center mb-8 gap-0.5">
+            <div className="flex items-center">
               <div className="w-5 border-t-2 border-dashed border-rose-300" />
               <motion.span
                 animate={{ scale: [1, 1.35, 1] }}
                 transition={{ duration: 2, repeat: Infinity }}
-                className="text-rose-400 text-sm px-0.5"
+                className="text-rose-400 text-sm px-0.5 cursor-pointer"
+                onClick={hasChildren ? () => setExpanded(e => !e) : undefined}
               >
                 💕
               </motion.span>
               <div className="w-5 border-t-2 border-dashed border-rose-300" />
             </div>
+            {hasChildren && (
+              <span
+                className="text-[10px] bg-orange-100 text-orange-600 rounded-full px-2 py-0.5 font-bold cursor-pointer"
+                onClick={() => setExpanded(e => !e)}
+              >
+                {expanded ? '▲' : `▼ ${node.children.length}`}
+              </span>
+            )}
+          </div>
+        )}
 
-            <motion.div
-              className="relative flex flex-col items-center"
-              initial={{ opacity: 0, scale: 0.6 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: depth * 0.08 + 0.05, type: 'spring', stiffness: 180 }}
-              onHoverStart={() => setSpouseHovered(true)}
-              onHoverEnd={() => setSpouseHovered(false)}
-            >
-              <div className="relative">
-                <Avatar member={node.spouse.member} size={60} ring ghost={node.spouse.isGhost} />
-                {node.spouse.isGhost && (
-                  <span className="absolute -bottom-1 -right-1 text-[10px] bg-orange-100 text-orange-600 rounded-full px-1 font-bold border border-orange-200">?</span>
-                )}
-              </div>
-              <p className={`text-xs font-bold max-w-[72px] text-center leading-tight mt-1 ${node.spouse.isGhost ? 'text-orange-400 italic' : 'text-gray-700'}`}>
-                {node.spouse.member.name.split(' ')[0]}
-              </p>
-              {node.spouse.isGhost && <p className="text-[9px] text-orange-300 italic">not registered</p>}
-
-              {/* Hover tooltip for spouse */}
-              <AnimatePresence>
-                {spouseHovered && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8, scale: 0.92 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 8, scale: 0.92 }}
-                    transition={{ duration: 0.18 }}
-                    className="absolute z-50 bottom-full mb-3 left-1/2 -translate-x-1/2 bg-white rounded-2xl shadow-2xl border border-orange-100 p-4 w-64"
-                    style={{ minWidth: 220 }}
-                  >
-                    <div className="flex items-center gap-3 mb-3">
-                      <Avatar member={node.spouse!.member} size={40} ghost={node.spouse!.isGhost} />
-                      <div>
-                        <p className="font-extrabold text-gray-900 text-sm leading-tight">{node.spouse!.member.name}</p>
-                        <p className={`text-xs font-semibold ${node.spouse!.isGhost ? 'text-orange-400 italic' : 'text-orange-500'}`}>
-                          {node.spouse!.isGhost ? '⚠️ Not yet registered' : (node.spouse!.member.current_status || 'Family Member')}
-                        </p>
-                      </div>
-                    </div>
-                    {!node.spouse!.isGhost ? (
-                      <div className="space-y-1 text-xs text-gray-600">
-                        <p>🎂 {formatShortDate(node.spouse!.member.dob)} · Age {getAge(node.spouse!.member.dob)}</p>
-                        {node.spouse!.member.anniversary && <p>💍 {formatShortDate(node.spouse!.member.anniversary!)} · {getYearsMarried(node.spouse!.member.anniversary!)}y</p>}
-                        {node.spouse!.member.email && <p className="truncate">📧 {node.spouse!.member.email}</p>}
-                        {node.spouse!.member.phone && <p>📱 {node.spouse!.member.phone}</p>}
-                        {node.spouse!.member.qualification && <p>🎓 {node.spouse!.member.qualification}</p>}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-orange-400 italic">
-                        This person was referenced as a spouse but hasn't registered yet.
-                      </p>
-                    )}
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 w-3 h-3 bg-white border-b border-r border-orange-100 rotate-45 -mt-1.5" />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          </>
+        {node.mother && (
+          <MemberBubble
+            member={node.mother}
+            isGhost={node.motherIsGhost}
+            depth={depth}
+            hasChildren={hasChildren && !hasBothParents && !node.father}
+            expanded={expanded}
+            onToggle={() => setExpanded(e => !e)}
+            label="Family Member"
+          />
         )}
       </div>
 
-      {/* Children */}
+      {/* ── Children subtree ── */}
       <AnimatePresence>
         {expanded && node.children.length > 0 && (
           <motion.div
@@ -810,7 +891,6 @@ function TreeNodeCard({ node, depth }: { node: TreeNode; depth: number }) {
             exit={{ opacity: 0, height: 0 }}
             className="overflow-visible"
           >
-            {/* Vertical connector from parent couple */}
             <motion.div
               className="w-px h-8 bg-gradient-to-b from-orange-300 to-orange-100 mx-auto"
               initial={{ scaleY: 0 }}
@@ -818,7 +898,6 @@ function TreeNodeCard({ node, depth }: { node: TreeNode; depth: number }) {
               transition={{ delay: 0.15 }}
             />
 
-            {/* Horizontal bar spanning children */}
             {node.children.length > 1 && (
               <div className="relative flex justify-center">
                 <div
@@ -828,14 +907,16 @@ function TreeNodeCard({ node, depth }: { node: TreeNode; depth: number }) {
               </div>
             )}
 
-            {/* Children row */}
             <div className="flex gap-6 items-start justify-center">
-              {node.children.map(child => (
-                <div key={child.member.id} className="flex flex-col items-center">
-                  <div className="w-px h-6 bg-orange-200 mx-auto" />
-                  <TreeNodeCard node={child} depth={depth + 1} />
-                </div>
-              ))}
+              {node.children.map((child, idx) => {
+                const key = child.father?.id ?? child.mother?.id ?? `child-${idx}`;
+                return (
+                  <div key={key} className="flex flex-col items-center">
+                    <div className="w-px h-6 bg-orange-200 mx-auto" />
+                    <TreeNodeCard node={child} depth={depth + 1} />
+                  </div>
+                );
+              })}
             </div>
           </motion.div>
         )}
@@ -844,6 +925,7 @@ function TreeNodeCard({ node, depth }: { node: TreeNode; depth: number }) {
   );
 }
 
+// ── FamilyTreeSection ──────────────────────────────────────────────────────────
 function FamilyTreeSection({ members }: { members: Member[] }) {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: '-80px' });
@@ -861,7 +943,7 @@ function FamilyTreeSection({ members }: { members: Member[] }) {
           <h2 className="text-5xl font-black text-gray-900 mb-3" style={{ fontFamily: "'Georgia', serif" }}>
             Family Tree 🌳
           </h2>
-          <p className="text-gray-400 italic mb-5">Hover any member for details · Click to expand/collapse</p>
+          <p className="text-gray-400 italic mb-5">Hover any member for details · Click 💕 or ▲▼ to expand/collapse</p>
           <div className="flex flex-wrap items-center justify-center gap-5 text-sm text-gray-500">
             <span className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-full bg-orange-400 inline-block" /> Birthday today
@@ -886,21 +968,21 @@ function FamilyTreeSection({ members }: { members: Member[] }) {
             <p className="text-center text-gray-400 italic py-12">No family data yet — register members to see the tree!</p>
           ) : (
             <div className="flex gap-20 min-w-max justify-center pb-4 pt-4 flex-wrap">
-              {trees.map(tree => (
-                <TreeNodeCard key={tree.member.id} node={tree} depth={0} />
-              ))}
+              {trees.map((tree, idx) => {
+                const key = tree.father?.id ?? tree.mother?.id ?? `root-${idx}`;
+                return <TreeNodeCard key={key} node={tree} depth={0} />;
+              })}
             </div>
           )}
         </motion.div>
 
-        {/* Ghost legend note */}
         <motion.p
           className="text-center text-xs text-orange-400/70 italic mt-4"
           initial={{ opacity: 0 }}
           animate={inView ? { opacity: 1 } : {}}
           transition={{ delay: 0.5 }}
         >
-          ✨ Faded nodes indicate family members referenced but not yet registered · Fuzzy name matching active
+          ✨ Faded nodes = family members referenced but not yet registered · Strict name matching (case & space insensitive)
         </motion.p>
       </div>
     </section>
