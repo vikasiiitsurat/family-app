@@ -12,7 +12,7 @@ interface Section {
 
 export default function PrivacyPolicy() {
   const [expandedSection, setExpandedSection] = useState<string | null>('intro');
-  const [lastUpdated] = useState('February 19, 2026');
+  const [lastUpdated] = useState('February 20, 2026');
 
   const toggleSection = (sectionId: string) => {
     setExpandedSection(expandedSection === sectionId ? null : sectionId);

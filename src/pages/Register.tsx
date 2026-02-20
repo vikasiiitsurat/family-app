@@ -725,7 +725,8 @@ export default function Register() {
                         className="w-full px-5 py-4 border-2 border-gray-300 rounded-xl focus:border-maroon-800 focus:ring-4 focus:ring-maroon-200 text-lg transition-all shadow-sm bg-white hover:border-maroon-400"
                       >
                         <option value="">Select Qualification</option>
-                        <option value="Under 10th">Studying in School under 10th</option>
+                        <option value="Under 5th">under 5th</option>
+                        <option value="Under 10th">under 10th</option>
                         <option value="10th">Matriculation</option>
                         <option value="12th">Intermediate</option>
                         <option value="Diploma">Diploma</option>
