@@ -63,6 +63,10 @@ function isMarried(member: Member): boolean {
   return !!(member.spouse_name || member.anniversary);
 }
 
+function isLateName(name?: string): boolean {
+  return /^late\b/i.test((name || '').trim());
+}
+
 function getRoleBadge(member: Member): { label: string; icon: React.ReactNode; color: string } | null {
   if (member.fathers_name && !member.mothers_name && !member.spouse_name) {
     return { label: 'Son', icon: <Baby size={10} />, color: 'bg-sky-100 text-sky-700 border-sky-200' };
@@ -612,8 +616,13 @@ export default function Members() {
     } catch { /* silent */ }
   };
 
+  const visibleMembers = useMemo(
+    () => members.filter((m) => !isLateName(m.name)),
+    [members]
+  );
+
   const filteredMembers = useMemo(() => {
-    return members.filter((m) => {
+    return visibleMembers.filter((m) => {
       if (!m.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
       if (filterGender !== 'all') {
         const g = m.gender?.toLowerCase();
@@ -628,14 +637,14 @@ export default function Members() {
       if (filterSocial === 'has_social' && !m.linkedin && !m.whatsapp && !m.instagram && !m.facebook) return false;
       return true;
     });
-  }, [members, searchQuery, filterGender, filterMarital, filterSocial]);
+  }, [visibleMembers, searchQuery, filterGender, filterMarital, filterSocial]);
 
   // Stats
-  const totalMarried = useMemo(() => members.filter(isMarried).length, [members]);
-  const upcomingBirthdays = useMemo(() => getUpcomingBirthdays(members).length, [members]);
+  const totalMarried = useMemo(() => visibleMembers.filter(isMarried).length, [visibleMembers]);
+  const upcomingBirthdays = useMemo(() => getUpcomingBirthdays(visibleMembers).length, [visibleMembers]);
   const todayCelebrations = useMemo(
-    () => members.filter((m) => isTodayBirthday(m.dob) || isTodayAnniversary(m.anniversary)),
-    [members]
+    () => visibleMembers.filter((m) => isTodayBirthday(m.dob) || isTodayAnniversary(m.anniversary)),
+    [visibleMembers]
   );
 
   if (loading) {
@@ -741,7 +750,7 @@ export default function Members() {
             className="flex flex-wrap items-center justify-center gap-4"
           >
             {[
-              { icon: <Users size={20} />, value: members.length, label: 'Total Members', color: 'from-rose-400 to-pink-500', bg: 'from-rose-50 to-pink-50', border: 'border-rose-200', text: 'text-rose-700' },
+              { icon: <Users size={20} />, value: visibleMembers.length, label: 'Total Members', color: 'from-rose-400 to-pink-500', bg: 'from-rose-50 to-pink-50', border: 'border-rose-200', text: 'text-rose-700' },
               { icon: <Heart size={20} className="fill-current" />, value: totalMarried, label: 'Married Couples', color: 'from-pink-400 to-rose-500', bg: 'from-pink-50 to-rose-50', border: 'border-pink-200', text: 'text-pink-700' },
               { icon: <Star size={20} className="fill-current" />, value: upcomingBirthdays, label: 'Birthdays (30d)', color: 'from-amber-400 to-orange-500', bg: 'from-amber-50 to-orange-50', border: 'border-amber-200', text: 'text-amber-700' },
               { icon: <Sparkles size={20} />, value: todayCelebrations.length, label: "Today's Special", color: 'from-purple-400 to-pink-500', bg: 'from-purple-50 to-pink-50', border: 'border-purple-200', text: 'text-purple-700' },
@@ -856,7 +865,7 @@ export default function Members() {
                     {/* Result count */}
                     <div className="ml-auto flex items-center">
                       <span className="text-sm font-bold text-gray-500">
-                        Showing <span className="text-rose-600 text-base">{filteredMembers.length}</span> of {members.length} members
+                        Showing <span className="text-rose-600 text-base">{filteredMembers.length}</span> of {visibleMembers.length} members
                       </span>
                     </div>
                   </div>

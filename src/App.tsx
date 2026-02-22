@@ -4,7 +4,7 @@ import Home from './pages/Home';
 import Register from './pages/Register';
 import Members from './pages/Members';
 import PrivacyPolicy from './pages/PrivacyPolicy';
-
+import FamilyTree from './pages/FamilyTree';
 function App() {
   const [currentPage, setCurrentPage] = useState<'home' | 'register' | 'members' |'privacy'>('home');
 
@@ -15,7 +15,8 @@ function App() {
       {currentPage === 'register' && <Register />}
       {currentPage === 'members' && <Members />}
       {currentPage === 'privacy' && <PrivacyPolicy />}
-
+      {currentPage === 'familyTree' && <FamilyTree />}
+      
     </div>
   );
 }

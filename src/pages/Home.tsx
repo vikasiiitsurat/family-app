@@ -3,7 +3,7 @@ import { motion, AnimatePresence, useInView } from 'framer-motion';
 import { supabase } from '../lib/supabase';
 import Confetti from '../components/Confetti';
 
-// ─── EXACT DB SCHEMA from Register.tsx ───────────────────────────────────────
+// ─── DB SCHEMA ────────────────────────────────────────────────────────────────
 interface Member {
   id: string;
   name: string;
@@ -23,13 +23,11 @@ interface Member {
   timezone?: string | null;
 }
 
-// ─── PAGE PROP ────────────────────────────────────────────────────────────────
 interface HomeProps {
-  onNavigate: (page: 'register' | 'members' | 'privacy') => void;
+  onNavigate: (page: 'register' | 'members' | 'privacy' | 'familyTree') => void;
 }
 
-// ─── STRICT NAME MATCHING ─────────────────────────────────────────────────────
-// Only normalize: lowercase + collapse multiple spaces + trim
+// ─── UTILS ────────────────────────────────────────────────────────────────────
 function normalizeName(name: string): string {
   return name.toLowerCase().replace(/\s+/g, ' ').trim();
 }
@@ -38,16 +36,13 @@ function namesMatch(a: string, b: string): boolean {
   return normalizeName(a) === normalizeName(b);
 }
 
-// ─── DEDUPLICATE: only exact (case-insensitive, space-normalized) matches ─────
 function deduplicateMembers(members: Member[]): Member[] {
   const merged: Member[] = [];
   for (const m of members) {
     const match = merged.find(e => namesMatch(m.name, e.name));
     if (match) {
       (Object.keys(m) as (keyof Member)[]).forEach(k => {
-        if (m[k] != null && m[k] !== '' && !match[k]) {
-          (match as any)[k] = m[k];
-        }
+        if (m[k] != null && m[k] !== '' && !match[k]) (match as any)[k] = m[k];
       });
     } else {
       merged.push({ ...m });
@@ -58,8 +53,7 @@ function deduplicateMembers(members: Member[]): Member[] {
 
 function isToday(dateStr?: string | null): boolean {
   if (!dateStr) return false;
-  const d = new Date(dateStr);
-  const t = new Date();
+  const d = new Date(dateStr), t = new Date();
   return d.getMonth() === t.getMonth() && d.getDate() === t.getDate();
 }
 
@@ -77,8 +71,7 @@ function getNextOccurrence(dateStr: string): Date {
 }
 
 function getDaysUntil(dateStr: string): number {
-  const diff = getNextOccurrence(dateStr).getTime() - Date.now();
-  return Math.ceil(diff / 86400000);
+  return Math.ceil((getNextOccurrence(dateStr).getTime() - Date.now()) / 86400000);
 }
 
 function getAge(dob: string): number {
@@ -114,31 +107,32 @@ function Avatar({
   member,
   size = 48,
   ring = false,
-  ghost = false,
 }: {
   member: Member;
   size?: number;
   ring?: boolean;
-  ghost?: boolean;
 }) {
   const grad = AVATAR_GRADIENTS[member.id?.charCodeAt(0) % AVATAR_GRADIENTS.length ?? 0];
   return (
     <div
       className={`rounded-full flex-shrink-0 flex items-center justify-center text-white font-extrabold overflow-hidden
-        ${ring ? 'ring-4 ring-white shadow-xl' : 'shadow-md'}
-        ${ghost ? 'opacity-50 ring-2 ring-dashed ring-orange-300' : ''}`}
+        ${ring ? 'ring-4 ring-white shadow-xl' : 'shadow-md'}`}
       style={{ width: size, height: size, fontSize: size * 0.33, background: member.profile_photo ? 'transparent' : undefined }}
     >
       {member.profile_photo
         ? <img src={member.profile_photo} alt={member.name} className="w-full h-full object-cover" />
         : (
-          <div className={`w-full h-full bg-gradient-to-br ${ghost ? 'from-orange-200 to-amber-300' : grad} flex items-center justify-center`}>
-            {ghost ? '?' : getInitials(member.name)}
+          <div className={`w-full h-full bg-gradient-to-br ${grad} flex items-center justify-center`}>
+            {getInitials(member.name)}
           </div>
         )
       }
     </div>
   );
+}
+
+function Chip({ children }: { children: React.ReactNode }) {
+  return <span className="bg-white/20 backdrop-blur-sm px-4 py-1.5 rounded-full text-sm font-semibold">{children}</span>;
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
@@ -149,16 +143,21 @@ function HeroSection({ onNavigate }: HomeProps) {
 
   return (
     <section className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden">
+      {/* Base background */}
       <div className="absolute inset-0 bg-[#1c0a00]" />
+
+      {/* Radial glows */}
       <div className="absolute inset-0" style={{
         background: 'radial-gradient(ellipse 80% 60% at 20% 40%, rgba(180,60,0,0.35) 0%, transparent 70%), radial-gradient(ellipse 60% 80% at 80% 60%, rgba(130,20,50,0.4) 0%, transparent 65%), radial-gradient(ellipse 50% 50% at 50% 100%, rgba(200,100,0,0.2) 0%, transparent 60%)'
       }} />
 
+      {/* Grid overlay */}
       <div className="absolute inset-0 opacity-[0.04]" style={{
         backgroundImage: 'linear-gradient(rgba(255,180,80,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,180,80,0.5) 1px, transparent 1px)',
         backgroundSize: '60px 60px'
       }} />
 
+      {/* Floating emojis */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {floatingIcons.map((icon, i) => (
           <motion.span
@@ -173,6 +172,7 @@ function HeroSection({ onNavigate }: HomeProps) {
         ))}
       </div>
 
+      {/* Pulsing rings */}
       {[300, 520, 740].map((size, i) => (
         <motion.div key={i}
           className="absolute rounded-full border border-orange-800/20"
@@ -182,6 +182,7 @@ function HeroSection({ onNavigate }: HomeProps) {
         />
       ))}
 
+      {/* Content */}
       <div className="relative z-10 text-center px-6 max-w-5xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -240,9 +241,18 @@ function HeroSection({ onNavigate }: HomeProps) {
           >
             👨‍👩‍👧 View All Members
           </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.05, y: -3 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={() => onNavigate('familyTree')}
+            className="bg-white/10 backdrop-blur border border-white/25 text-white px-10 py-4 rounded-2xl font-bold text-lg hover:bg-white/20 transition-colors"
+          >
+            🌳 Family Tree
+          </motion.button>
         </motion.div>
       </div>
 
+      {/* Fade to next section */}
       <div className="absolute bottom-0 left-0 right-0 h-28 bg-gradient-to-t from-[#fdf6ee] to-transparent" />
     </section>
   );
@@ -289,8 +299,12 @@ function TodaySection({ members }: { members: Member[] }) {
           </motion.div>
         ) : (
           <div className="space-y-6">
-            {todayBdays.map((m, i) => <TodayCard key={m.id} member={m} type="birthday" delay={i * 0.15} inView={inView} />)}
-            {todayAnnivs.map((m, i) => <TodayCard key={m.id + 'a'} member={m} type="anniversary" delay={(todayBdays.length + i) * 0.15} inView={inView} />)}
+            {todayBdays.map((m, i) => (
+              <TodayCard key={m.id} member={m} type="birthday" delay={i * 0.15} inView={inView} />
+            ))}
+            {todayAnnivs.map((m, i) => (
+              <TodayCard key={m.id + 'a'} member={m} type="anniversary" delay={(todayBdays.length + i) * 0.15} inView={inView} />
+            ))}
           </div>
         )}
       </div>
@@ -298,15 +312,20 @@ function TodaySection({ members }: { members: Member[] }) {
   );
 }
 
-function TodayCard({ member: m, type, delay, inView }: { member: Member; type: 'birthday' | 'anniversary'; delay: number; inView: boolean }) {
+function TodayCard({ member: m, type, delay, inView }: {
+  member: Member; type: 'birthday' | 'anniversary'; delay: number; inView: boolean;
+}) {
   const isBday = type === 'birthday';
   return (
     <motion.div
       initial={{ opacity: 0, y: 30 }}
       animate={inView ? { opacity: 1, y: 0 } : {}}
       transition={{ delay, duration: 0.6, type: 'spring' }}
-      className={`relative overflow-hidden rounded-3xl shadow-2xl ${isBday ? 'bg-gradient-to-r from-orange-500 via-rose-500 to-pink-600' : 'bg-gradient-to-r from-rose-600 via-pink-600 to-fuchsia-600'}`}
+      className={`relative overflow-hidden rounded-3xl shadow-2xl ${isBday
+        ? 'bg-gradient-to-r from-orange-500 via-rose-500 to-pink-600'
+        : 'bg-gradient-to-r from-rose-600 via-pink-600 to-fuchsia-600'}`}
     >
+      {/* Sparkle dots */}
       <div className="absolute inset-0 overflow-hidden">
         {[...Array(16)].map((_, i) => (
           <motion.div key={i}
@@ -361,10 +380,6 @@ function TodayCard({ member: m, type, delay, inView }: { member: Member; type: '
   );
 }
 
-function Chip({ children }: { children: React.ReactNode }) {
-  return <span className="bg-white/20 backdrop-blur-sm px-4 py-1.5 rounded-full text-sm font-semibold">{children}</span>;
-}
-
 // ════════════════════════════════════════════════════════════════════════════════
 // SECTION 3 — THIS MONTH
 // ════════════════════════════════════════════════════════════════════════════════
@@ -397,7 +412,13 @@ function MonthSection({ members }: { members: Member[] }) {
         </motion.div>
 
         {events.length === 0 ? (
-          <p className="text-center text-gray-400 italic py-16 text-lg">No more events this month</p>
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={inView ? { opacity: 1 } : {}}
+            className="text-center text-gray-400 italic py-16 text-lg"
+          >
+            No more events this month
+          </motion.p>
         ) : (
           <div className="space-y-3">
             {events.map(({ member: m, type, date }, i) => {
@@ -410,9 +431,15 @@ function MonthSection({ members }: { members: Member[] }) {
                   transition={{ delay: i * 0.08, duration: 0.5 }}
                   className="flex items-center gap-5 p-5 rounded-2xl bg-gradient-to-r from-orange-50/60 to-rose-50/60 border border-orange-100 hover:shadow-md hover:border-orange-200 transition-all group"
                 >
-                  <div className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center text-white font-black shadow-lg flex-shrink-0 ${type === 'birthday' ? 'bg-gradient-to-br from-orange-400 to-rose-500' : 'bg-gradient-to-br from-rose-500 to-fuchsia-600'}`}>
+                  {/* Date badge */}
+                  <div className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center text-white font-black shadow-lg flex-shrink-0 ${type === 'birthday'
+                    ? 'bg-gradient-to-br from-orange-400 to-rose-500'
+                    : 'bg-gradient-to-br from-rose-500 to-fuchsia-600'}`}
+                  >
                     <span className="text-xl leading-none">{new Date(date).getDate()}</span>
-                    <span className="text-[10px] opacity-80 font-bold">{new Date(date).toLocaleString('default', { month: 'short' })}</span>
+                    <span className="text-[10px] opacity-80 font-bold">
+                      {new Date(date).toLocaleString('default', { month: 'short' })}
+                    </span>
                   </div>
 
                   <Avatar member={m} size={46} />
@@ -425,7 +452,10 @@ function MonthSection({ members }: { members: Member[] }) {
                   </div>
 
                   <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                    <span className={`px-3 py-1 rounded-full text-xs font-extrabold ${type === 'birthday' ? 'bg-orange-100 text-orange-700' : 'bg-rose-100 text-rose-700'}`}>
+                    <span className={`px-3 py-1 rounded-full text-xs font-extrabold ${type === 'birthday'
+                      ? 'bg-orange-100 text-orange-700'
+                      : 'bg-rose-100 text-rose-700'}`}
+                    >
                       {type === 'birthday' ? '🎂 Birthday' : '💍 Anniversary'}
                     </span>
                     <span className="text-xs text-gray-400 font-medium">
@@ -443,572 +473,24 @@ function MonthSection({ members }: { members: Member[] }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// SECTION 4 — FAMILY TREE (COUPLE-UNIT BASED)
-// ════════════════════════════════════════════════════════════════════════════════
-
-interface CoupleUnit {
-  key: string;
-  father?: Member;
-  fatherIsGhost: boolean;
-  mother?: Member;
-  motherIsGhost: boolean;
-  children: Member[];
-}
-
-interface TreeNode {
-  father?: Member;
-  fatherIsGhost: boolean;
-  mother?: Member;
-  motherIsGhost: boolean;
-  children: TreeNode[];
-}
-
-// ── buildTree() ────────────────────────────────────────────────────────────────
-function buildTree(members: Member[]): TreeNode[] {
-  // ── Ghost registry ──────────────────────────────────────────────────────────
-  let ghostCounter = 0;
-  const ghostByName = new Map<string, Member>();
-
-  const makeGhost = (name: string): Member => {
-    // Key by normalized name so "ved" and "Ved" → same ghost
-    const key = normalizeName(name);
-    if (!ghostByName.has(key)) {
-      ghostCounter--;
-      ghostByName.set(key, {
-        id: `ghost_${ghostCounter}`,
-        name: name.trim(),
-        email: '',
-        dob: '1970-01-01',
-        phone: '',
-        qualification: '',
-        current_status: 'Not Registered',
-        profile_photo: null,
-        fathers_name: null,
-        mothers_name: null,
-        spouse_name: null,
-        anniversary: null,
-      });
-    }
-    return ghostByName.get(key)!;
-  };
-
-  // ── Member lookup: strict case-insensitive + space-normalized ───────────────
-  const findReal = (name: string, excludeId?: string): Member | undefined =>
-    members.find(m => m.id !== excludeId && namesMatch(m.name, name));
-
-  const resolve = (name: string, excludeId?: string): { member: Member; isGhost: boolean } => {
-    const real = findReal(name, excludeId);
-    return real
-      ? { member: real, isGhost: false }
-      : { member: makeGhost(name), isGhost: true };
-  };
-
-  // ── Couple key: normalize both names so spacing/case never splits a couple ──
-  const makeCoupleKey = (a?: string, b?: string): string =>
-    [a, b]
-      .filter(Boolean)
-      .map(s => normalizeName(s!))
-      .sort()
-      .join('__');
-
-  // ── Couple map ──────────────────────────────────────────────────────────────
-  const couples = new Map<string, CoupleUnit>();
-
-  const getOrCreateCouple = (
-    fatherName?: string,
-    motherName?: string,
-    fallbackFatherId?: string,
-  ): CoupleUnit => {
-    const key = fatherName || motherName
-      ? makeCoupleKey(fatherName, motherName)
-      : `single__${fallbackFatherId}`;
-
-    if (couples.has(key)) return couples.get(key)!;
-
-    const unit: CoupleUnit = {
-      key,
-      father: undefined,
-      fatherIsGhost: false,
-      mother: undefined,
-      motherIsGhost: false,
-      children: [],
-    };
-
-    if (fatherName) {
-      const r = resolve(fatherName);
-      unit.father = r.member;
-      unit.fatherIsGhost = r.isGhost;
-    }
-    if (motherName) {
-      const r = resolve(motherName);
-      unit.mother = r.member;
-      unit.motherIsGhost = r.isGhost;
-    }
-
-    couples.set(key, unit);
-    return unit;
-  };
-
-  // ── Step 1: assign every member to their parents' CoupleUnit ────────────────
-  const childOfKey = new Map<string, string>();
-
-  members.forEach(child => {
-    const fn = child.fathers_name?.trim() || undefined;
-    const mn = child.mothers_name?.trim() || undefined;
-    if (!fn && !mn) return;
-
-    const couple = getOrCreateCouple(fn, mn);
-    if (!couple.children.find(c => c.id === child.id)) {
-      couple.children.push(child);
-    }
-    childOfKey.set(child.id, couple.key);
-  });
-
-  // ── Step 2: build reverse index — which couple does each member PARENT? ─────
-  const parentCoupleKey = new Map<string, string>();
-
-  couples.forEach(c => {
-    if (c.father && !c.fatherIsGhost) parentCoupleKey.set(c.father.id, c.key);
-    if (c.mother && !c.motherIsGhost) parentCoupleKey.set(c.mother.id, c.key);
-  });
-
-  // ── Step 3: self-couples for members not yet in any couple as parent ─────────
-  const processedAsParent = new Set<string>(parentCoupleKey.keys());
-
-  members.forEach(m => {
-    if (processedAsParent.has(m.id)) return;
-
-    const spouseName = m.spouse_name?.trim() || undefined;
-
-    if (spouseName) {
-      // Strict name match for spouse
-      const spReal = members.find(
-        s => s.id !== m.id && namesMatch(s.name, spouseName),
-      );
-
-      if (spReal) {
-        const key = makeCoupleKey(m.name, spReal.name);
-        if (!couples.has(key)) {
-          couples.set(key, {
-            key,
-            father: m,
-            fatherIsGhost: false,
-            mother: spReal,
-            motherIsGhost: false,
-            children: [],
-          });
-        }
-        if (!parentCoupleKey.has(m.id)) parentCoupleKey.set(m.id, key);
-        if (!parentCoupleKey.has(spReal.id)) parentCoupleKey.set(spReal.id, key);
-        processedAsParent.add(m.id);
-        processedAsParent.add(spReal.id);
-      } else {
-        // Spouse unregistered → ghost
-        const key = makeCoupleKey(m.name, spouseName);
-        if (!couples.has(key)) {
-          const ghost = makeGhost(spouseName);
-          couples.set(key, {
-            key,
-            father: m,
-            fatherIsGhost: false,
-            mother: ghost,
-            motherIsGhost: true,
-            children: [],
-          });
-        }
-        parentCoupleKey.set(m.id, key);
-        processedAsParent.add(m.id);
-      }
-    } else {
-      // No spouse — single-person node
-      const key = `single__${m.id}`;
-      if (!couples.has(key)) {
-        couples.set(key, {
-          key,
-          father: m,
-          fatherIsGhost: false,
-          mother: undefined,
-          motherIsGhost: false,
-          children: [],
-        });
-      }
-      parentCoupleKey.set(m.id, key);
-      processedAsParent.add(m.id);
-    }
-  });
-
-  // ── Step 4: root detection ───────────────────────────────────────────────────
-  const isChildMember = new Set<string>(childOfKey.keys());
-
-  const rootCouples: CoupleUnit[] = [];
-  const seenRootKeys = new Set<string>();
-
-  couples.forEach(c => {
-    const fId = c.father?.id;
-    const mId = c.mother?.id;
-    const fIsChild = fId && !c.fatherIsGhost && isChildMember.has(fId);
-    const mIsChild = mId && !c.motherIsGhost && isChildMember.has(mId);
-    if (!fIsChild && !mIsChild && !seenRootKeys.has(c.key)) {
-      seenRootKeys.add(c.key);
-      rootCouples.push(c);
-    }
-  });
-
-  // ── Step 5: recursive TreeNode builder ──────────────────────────────────────
-  const visited = new Set<string>();
-
-  const buildNode = (couple: CoupleUnit): TreeNode => {
-    visited.add(couple.key);
-
-    const childNodes: TreeNode[] = [];
-
-    for (const child of couple.children) {
-      const ck = parentCoupleKey.get(child.id);
-      if (ck && !visited.has(ck)) {
-        const childCouple = couples.get(ck);
-        if (childCouple) {
-          childNodes.push(buildNode(childCouple));
-        }
-      } else if (!ck) {
-        const singleKey = `single__${child.id}`;
-        if (!visited.has(singleKey)) {
-          const singleCouple: CoupleUnit = {
-            key: singleKey,
-            father: child,
-            fatherIsGhost: false,
-            mother: undefined,
-            motherIsGhost: false,
-            children: [],
-          };
-          childNodes.push(buildNode(singleCouple));
-        }
-      }
-    }
-
-    return {
-      father: couple.father,
-      fatherIsGhost: couple.fatherIsGhost,
-      mother: couple.mother,
-      motherIsGhost: couple.motherIsGhost,
-      children: childNodes,
-    };
-  };
-
-  return rootCouples
-    .filter(c => !visited.has(c.key))
-    .map(c => buildNode(c));
-}
-
-// ── Tooltip ────────────────────────────────────────────────────────────────────
-function MemberTooltip({
-  member,
-  isGhost,
-  show,
-  label,
-}: {
-  member: Member;
-  isGhost: boolean;
-  show: boolean;
-  label: string;
-}) {
-  return (
-    <AnimatePresence>
-      {show && (
-        <motion.div
-          initial={{ opacity: 0, y: 8, scale: 0.92 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 8, scale: 0.92 }}
-          transition={{ duration: 0.18 }}
-          className="absolute z-50 bottom-full mb-3 left-1/2 -translate-x-1/2 bg-white rounded-2xl shadow-2xl border border-orange-100 p-4 w-64"
-          style={{ minWidth: 220 }}
-        >
-          <div className="flex items-center gap-3 mb-3">
-            <Avatar member={member} size={40} ghost={isGhost} />
-            <div>
-              <p className="font-extrabold text-gray-900 text-sm leading-tight">{member.name}</p>
-              <p className={`text-xs font-semibold ${isGhost ? 'text-orange-400 italic' : 'text-orange-500'}`}>
-                {isGhost ? '⚠️ Not yet registered' : (member.current_status || label)}
-              </p>
-            </div>
-          </div>
-          {!isGhost ? (
-            <div className="space-y-1 text-xs text-gray-600">
-              <p>🎂 {formatShortDate(member.dob)} · Age {getAge(member.dob)}</p>
-              {member.anniversary && <p>💍 {formatShortDate(member.anniversary)} · {getYearsMarried(member.anniversary)}y</p>}
-              {member.spouse_name && <p>💕 Spouse: {member.spouse_name}</p>}
-              {member.fathers_name && <p>👨 {member.fathers_name}</p>}
-              {member.mothers_name && <p>👩 {member.mothers_name}</p>}
-              {member.email && <p className="truncate">📧 {member.email}</p>}
-              {member.phone && <p>📱 {member.phone}</p>}
-              {member.qualification && <p>🎓 {member.qualification}</p>}
-            </div>
-          ) : (
-            <p className="text-xs text-orange-400 italic">
-              Referenced by family members but not yet registered.
-            </p>
-          )}
-          <div className="absolute top-full left-1/2 -translate-x-1/2 w-3 h-3 bg-white border-b border-r border-orange-100 rotate-45 -mt-1.5" />
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-}
-
-// ── Member bubble ──────────────────────────────────────────────────────────────
-function MemberBubble({
-  member,
-  isGhost,
-  depth,
-  hasChildren,
-  expanded,
-  onToggle,
-  label,
-}: {
-  member: Member;
-  isGhost: boolean;
-  depth: number;
-  hasChildren: boolean;
-  expanded: boolean;
-  onToggle: () => void;
-  label: string;
-}) {
-  const [hovered, setHovered] = useState(false);
-  const hasCelebration =
-    !isGhost && (isToday(member.dob) || (member.anniversary && isToday(member.anniversary)));
-
-  return (
-    <motion.div
-      className="relative flex flex-col items-center"
-      initial={{ opacity: 0, scale: 0.6 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ delay: depth * 0.08, type: 'spring', stiffness: 180 }}
-      onHoverStart={() => setHovered(true)}
-      onHoverEnd={() => setHovered(false)}
-    >
-      {hasCelebration && (
-        <motion.div
-          className="absolute inset-0 rounded-full bg-orange-400/40 blur-md"
-          animate={{ scale: [1, 1.5, 1], opacity: [0.4, 0.9, 0.4] }}
-          transition={{ duration: 1.8, repeat: Infinity }}
-        />
-      )}
-
-      <div
-        className="relative z-10 flex flex-col items-center gap-1 cursor-pointer"
-        onClick={hasChildren ? onToggle : undefined}
-      >
-        <div className="relative">
-          <Avatar member={member} size={60} ring ghost={isGhost} />
-          {isGhost && (
-            <span className="absolute -bottom-1 -right-1 text-[10px] bg-orange-100 text-orange-600 rounded-full px-1 font-bold border border-orange-200">
-              ?
-            </span>
-          )}
-        </div>
-        <p className={`text-xs font-bold max-w-[72px] text-center leading-tight ${isGhost ? 'text-orange-400 italic' : 'text-gray-700'}`}>
-          {member.name.split(' ')[0]}
-        </p>
-        {isGhost && <p className="text-[9px] text-orange-300 italic">not registered</p>}
-        {hasChildren && (
-          <span className="text-[10px] bg-orange-100 text-orange-600 rounded-full px-2 py-0.5 font-bold cursor-pointer">
-            {expanded ? '▲' : `▼`}
-          </span>
-        )}
-      </div>
-
-      <MemberTooltip member={member} isGhost={isGhost} show={hovered} label={label} />
-    </motion.div>
-  );
-}
-
-// ── TreeNodeCard ───────────────────────────────────────────────────────────────
-function TreeNodeCard({ node, depth }: { node: TreeNode; depth: number }) {
-  const [expanded, setExpanded] = useState(true);
-
-  const hasBothParents = !!node.father && !!node.mother;
-  const hasChildren = node.children.length > 0;
-
-  return (
-    <div className="flex flex-col items-center select-none">
-      {/* ── Couple row ── */}
-      <div className="flex items-end gap-2">
-        {node.father && (
-          <MemberBubble
-            member={node.father}
-            isGhost={node.fatherIsGhost}
-            depth={depth}
-            hasChildren={hasChildren && !hasBothParents}
-            expanded={expanded}
-            onToggle={() => setExpanded(e => !e)}
-            label="Family Member"
-          />
-        )}
-
-        {hasBothParents && (
-          <div className="flex flex-col items-center mb-8 gap-0.5">
-            <div className="flex items-center">
-              <div className="w-5 border-t-2 border-dashed border-rose-300" />
-              <motion.span
-                animate={{ scale: [1, 1.35, 1] }}
-                transition={{ duration: 2, repeat: Infinity }}
-                className="text-rose-400 text-sm px-0.5 cursor-pointer"
-                onClick={hasChildren ? () => setExpanded(e => !e) : undefined}
-              >
-                💕
-              </motion.span>
-              <div className="w-5 border-t-2 border-dashed border-rose-300" />
-            </div>
-            {hasChildren && (
-              <span
-                className="text-[10px] bg-orange-100 text-orange-600 rounded-full px-2 py-0.5 font-bold cursor-pointer"
-                onClick={() => setExpanded(e => !e)}
-              >
-                {expanded ? '▲' : `▼ ${node.children.length}`}
-              </span>
-            )}
-          </div>
-        )}
-
-        {node.mother && (
-          <MemberBubble
-            member={node.mother}
-            isGhost={node.motherIsGhost}
-            depth={depth}
-            hasChildren={hasChildren && !hasBothParents && !node.father}
-            expanded={expanded}
-            onToggle={() => setExpanded(e => !e)}
-            label="Family Member"
-          />
-        )}
-      </div>
-
-      {/* ── Children subtree ── */}
-      <AnimatePresence>
-        {expanded && node.children.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-visible"
-          >
-            <motion.div
-              className="w-px h-8 bg-gradient-to-b from-orange-300 to-orange-100 mx-auto"
-              initial={{ scaleY: 0 }}
-              animate={{ scaleY: 1 }}
-              transition={{ delay: 0.15 }}
-            />
-
-            {node.children.length > 1 && (
-              <div className="relative flex justify-center">
-                <div
-                  className="h-px bg-orange-200"
-                  style={{ width: `${(node.children.length - 1) * 120}px` }}
-                />
-              </div>
-            )}
-
-            <div className="flex gap-6 items-start justify-center">
-              {node.children.map((child, idx) => {
-                const key = child.father?.id ?? child.mother?.id ?? `child-${idx}`;
-                return (
-                  <div key={key} className="flex flex-col items-center">
-                    <div className="w-px h-6 bg-orange-200 mx-auto" />
-                    <TreeNodeCard node={child} depth={depth + 1} />
-                  </div>
-                );
-              })}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-// ── FamilyTreeSection ──────────────────────────────────────────────────────────
-function FamilyTreeSection({ members }: { members: Member[] }) {
-  const ref = useRef(null);
-  const inView = useInView(ref, { once: true, margin: '-80px' });
-  const trees = buildTree(members);
-
-  return (
-    <section ref={ref} className="py-24 px-5 bg-gradient-to-br from-[#fdf6ee] via-white to-orange-50/30 overflow-x-auto">
-      <div className="max-w-7xl mx-auto">
-        <motion.div
-          className="text-center mb-14"
-          initial={{ opacity: 0, y: 30 }}
-          animate={inView ? { opacity: 1, y: 0 } : {}}
-        >
-          <p className="text-xs font-bold tracking-[0.3em] uppercase text-emerald-500 mb-3">OUR ROOTS</p>
-          <h2 className="text-5xl font-black text-gray-900 mb-3" style={{ fontFamily: "'Georgia', serif" }}>
-            Family Tree 🌳
-          </h2>
-          <p className="text-gray-400 italic mb-5">Hover any member for details · Click 💕 or ▲▼ to expand/collapse</p>
-          <div className="flex flex-wrap items-center justify-center gap-5 text-sm text-gray-500">
-            <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-full bg-orange-400 inline-block" /> Birthday today
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="border-t-2 border-dashed border-rose-300 w-7 inline-block" /> Spouse connection
-            </span>
-            <span className="flex items-center gap-1.5">💕 Married couple</span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-4 h-4 rounded-full bg-orange-200 opacity-60 border-2 border-dashed border-orange-400 inline-block" /> Unregistered parent
-            </span>
-          </div>
-        </motion.div>
-
-        <motion.div
-          className="bg-white/70 backdrop-blur-sm rounded-3xl p-8 md:p-12 shadow-2xl border border-orange-100 overflow-x-auto"
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={inView ? { opacity: 1, scale: 1 } : {}}
-          transition={{ delay: 0.2 }}
-        >
-          {trees.length === 0 ? (
-            <p className="text-center text-gray-400 italic py-12">No family data yet — register members to see the tree!</p>
-          ) : (
-            <div className="flex gap-20 min-w-max justify-center pb-4 pt-4 flex-wrap">
-              {trees.map((tree, idx) => {
-                const key = tree.father?.id ?? tree.mother?.id ?? `root-${idx}`;
-                return <TreeNodeCard key={key} node={tree} depth={0} />;
-              })}
-            </div>
-          )}
-        </motion.div>
-
-        <motion.p
-          className="text-center text-xs text-orange-400/70 italic mt-4"
-          initial={{ opacity: 0 }}
-          animate={inView ? { opacity: 1 } : {}}
-          transition={{ delay: 0.5 }}
-        >
-          ✨ Faded nodes = family members referenced but not yet registered · Strict name matching (case & space insensitive)
-        </motion.p>
-      </div>
-    </section>
-  );
-}
-
-// ════════════════════════════════════════════════════════════════════════════════
-// SECTION 5 — UPCOMING
+// SECTION 4 — UPCOMING
 // ════════════════════════════════════════════════════════════════════════════════
 function UpcomingSection({ members }: { members: Member[] }) {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: '-80px' });
 
-  const ranked = (type: 'birthday' | 'anniversary') => {
-    return members
+  const ranked = (type: 'birthday' | 'anniversary') =>
+    members
       .filter(m => type === 'birthday' ? !isToday(m.dob) : m.anniversary && !isToday(m.anniversary))
       .map(m => ({ m, days: getDaysUntil(type === 'birthday' ? m.dob : m.anniversary!) }))
       .sort((a, b) => a.days - b.days)
       .slice(0, 3);
-  };
 
   const upBdays = ranked('birthday');
   const upAnnivs = ranked('anniversary');
 
   return (
-    <section ref={ref} className="py-24 px-5 bg-white">
+    <section ref={ref} className="py-24 px-5 bg-[#fdf6ee]">
       <div className="max-w-5xl mx-auto">
         <motion.div
           className="text-center mb-14"
@@ -1019,6 +501,7 @@ function UpcomingSection({ members }: { members: Member[] }) {
           <h2 className="text-5xl font-black text-gray-900 mb-3" style={{ fontFamily: "'Georgia', serif" }}>
             Next Celebrations 🎉
           </h2>
+          <p className="text-gray-400 italic">Don't miss these special moments coming up soon</p>
         </motion.div>
 
         <div className="grid md:grid-cols-2 gap-8">
@@ -1054,7 +537,9 @@ function UpcomingSection({ members }: { members: Member[] }) {
   );
 }
 
-function UpcomingCard({ member: m, days, label, color, rank }: { member: Member; days: number; label: string; color: string; rank: number }) {
+function UpcomingCard({ member: m, days, label, color, rank }: {
+  member: Member; days: number; label: string; color: string; rank: number;
+}) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 15 }}
@@ -1077,13 +562,15 @@ function UpcomingCard({ member: m, days, label, color, rank }: { member: Member;
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// SECTION 6 — STATS
+// SECTION 5 — STATS
 // ════════════════════════════════════════════════════════════════════════════════
 function StatsSection({ members }: { members: Member[] }) {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: '-80px' });
 
-  const thisMonth = members.filter(m => isThisMonth(m.dob) || (m.anniversary && isThisMonth(m.anniversary))).length;
+  const thisMonth = members.filter(m =>
+    isThisMonth(m.dob) || (m.anniversary && isThisMonth(m.anniversary))
+  ).length;
   const married = members.filter(m => m.spouse_name || m.anniversary).length;
 
   const stats = [
@@ -1093,7 +580,7 @@ function StatsSection({ members }: { members: Member[] }) {
   ];
 
   return (
-    <section ref={ref} className="py-24 px-5 bg-[#fdf6ee]">
+    <section ref={ref} className="py-24 px-5 bg-white">
       <div className="max-w-4xl mx-auto">
         <motion.div
           className="text-center mb-14"
@@ -1138,64 +625,145 @@ function StatsSection({ members }: { members: Member[] }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// SECTION 7 — MEMBERS PREVIEW
+// SECTION 6 — FAMILY TREE PROMO BANNER
 // ════════════════════════════════════════════════════════════════════════════════
-function MembersPreview({ members, onNavigate }: { members: Member[]; onNavigate: (p: 'register' | 'members' | 'privacy') => void }) {
+function FamilyTreeBanner({ onNavigate }: HomeProps) {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: '-80px' });
-  const preview = members.slice(0, 6);
 
   return (
-    <section ref={ref} className="py-24 px-5 bg-white">
-      <div className="max-w-5xl mx-auto">
+    <section ref={ref} className="py-20 px-5 bg-[#fdf6ee]">
+      <div className="max-w-4xl mx-auto">
         <motion.div
-          className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-4"
-          initial={{ opacity: 0, y: 30 }}
+          initial={{ opacity: 0, y: 40 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.7 }}
+          className="relative overflow-hidden rounded-3xl"
+          style={{
+            background: 'linear-gradient(135deg, #0d2610 0%, #061009 50%, #0a1f0d 100%)',
+            border: '1px solid rgba(52,211,153,0.2)',
+            boxShadow: '0 25px 60px rgba(0,0,0,0.3), inset 0 1px 0 rgba(52,211,153,0.1)',
+          }}
         >
-          <div>
-            <p className="text-xs font-bold tracking-[0.3em] uppercase text-orange-500 mb-2">OUR PEOPLE</p>
-            <h2 className="text-5xl font-black text-gray-900" style={{ fontFamily: "'Georgia', serif" }}>
-              Meet the Family 👨‍👩‍👧‍👦
-            </h2>
+          {/* Animated particles */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            {['🍃', '🌿', '✨', '🌱', '💫', '⭐', '🍀', '🌸'].map((icon, i) => (
+              <motion.span
+                key={i}
+                className="absolute text-lg select-none opacity-20"
+                style={{ left: `${10 + i * 12}%`, bottom: '-5%' }}
+                animate={{ y: [0, -300], opacity: [0, 0.3, 0] }}
+                transition={{ duration: 10 + i, repeat: Infinity, delay: i * 1.2, ease: 'easeInOut' }}
+              >
+                {icon}
+              </motion.span>
+            ))}
           </div>
-          <button
-            onClick={() => onNavigate('members')}
-            className="text-orange-600 font-bold hover:text-rose-600 transition-colors text-sm border border-orange-200 hover:border-rose-300 rounded-xl px-5 py-2.5 hover:shadow-md"
-          >
-            View All Members →
-          </button>
-        </motion.div>
 
-        <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-5">
-          {preview.map((m, i) => (
+          {/* Glow orbs */}
+          <div className="absolute top-0 right-0 w-64 h-64 rounded-full opacity-10 blur-3xl"
+            style={{ background: 'radial-gradient(circle, #34d399 0%, transparent 70%)' }} />
+          <div className="absolute bottom-0 left-0 w-48 h-48 rounded-full opacity-8 blur-3xl"
+            style={{ background: 'radial-gradient(circle, #fbbf24 0%, transparent 70%)' }} />
+
+          <div className="relative z-10 p-10 md:p-14 flex flex-col md:flex-row items-center gap-8">
+            {/* Icon side */}
             <motion.div
-              key={m.id}
-              initial={{ opacity: 0, y: 30 }}
-              animate={inView ? { opacity: 1, y: 0 } : {}}
-              transition={{ delay: i * 0.08 }}
-              whileHover={{ y: -6, scale: 1.02 }}
-              className="bg-gradient-to-br from-orange-50 to-rose-50/40 border border-orange-100 rounded-2xl p-5 flex items-center gap-4 hover:shadow-lg hover:border-orange-200 transition-all cursor-default"
+              className="text-8xl md:text-9xl flex-shrink-0 select-none"
+              animate={{ rotate: [0, 5, -5, 0], scale: [1, 1.05, 1] }}
+              transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
             >
-              <Avatar member={m} size={56} ring />
-              <div className="min-w-0 flex-1">
-                <p className="font-extrabold text-gray-900 truncate">{m.name}</p>
-                <p className="text-xs text-orange-500 font-semibold truncate">{m.current_status || m.qualification}</p>
-                <p className="text-xs text-gray-400 mt-0.5">🎂 {formatShortDate(m.dob)}</p>
-                {m.anniversary && <p className="text-xs text-rose-400">💍 {formatShortDate(m.anniversary)}</p>}
-              </div>
+              🌳
             </motion.div>
-          ))}
-        </div>
+
+            {/* Text side */}
+            <div className="flex-1 text-center md:text-left">
+              <motion.span
+                className="inline-block text-xs font-bold tracking-[0.3em] uppercase mb-3 px-4 py-1.5 rounded-full"
+                style={{ color: 'rgba(52,211,153,0.9)', background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)' }}
+                initial={{ opacity: 0 }}
+                animate={inView ? { opacity: 1 } : {}}
+                transition={{ delay: 0.3 }}
+              >
+                ✨ New Feature
+              </motion.span>
+
+              <motion.h2
+                className="text-3xl md:text-4xl font-black text-white mb-3 leading-tight"
+                style={{ fontFamily: "'Georgia', serif" }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={inView ? { opacity: 1, y: 0 } : {}}
+                transition={{ delay: 0.4 }}
+              >
+                Explore Your{' '}
+                <span style={{
+                  background: 'linear-gradient(135deg, #34d399, #fbbf24)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                }}>
+                  Family Tree
+                </span>
+              </motion.h2>
+
+              <motion.p
+                className="text-white/50 mb-6 text-base leading-relaxed"
+                initial={{ opacity: 0 }}
+                animate={inView ? { opacity: 1 } : {}}
+                transition={{ delay: 0.5 }}
+              >
+                Visualise generations of your family in a beautiful interactive tree. Drag, zoom, hover to discover connections and celebrate milestones.
+              </motion.p>
+
+              <motion.div
+                className="flex flex-wrap gap-3 justify-center md:justify-start mb-6"
+                initial={{ opacity: 0 }}
+                animate={inView ? { opacity: 1 } : {}}
+                transition={{ delay: 0.55 }}
+              >
+                {['🔍 Search members', '📊 Live stats', '💕 Couple links', '🎂 Birthday glow', '🖱️ Pan & zoom'].map(tag => (
+                  <span key={tag} className="text-xs font-semibold px-3 py-1 rounded-full"
+                    style={{ color: 'rgba(255,255,255,0.5)', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    {tag}
+                  </span>
+                ))}
+              </motion.div>
+
+              <motion.button
+                whileHover={{ scale: 1.05, y: -3 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => onNavigate('familyTree')}
+                className="inline-flex items-center gap-3 px-8 py-4 rounded-2xl font-bold text-base text-white shadow-2xl"
+                style={{
+                  background: 'linear-gradient(135deg, #059669 0%, #34d399 50%, #fbbf24 100%)',
+                  boxShadow: '0 10px 40px rgba(52,211,153,0.3)',
+                }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={inView ? { opacity: 1, y: 0 } : {}}
+                transition={{ delay: 0.65 }}
+              >
+                🌳 Open Family Tree
+                <motion.span
+                  animate={{ x: [0, 5, 0] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                >
+                  →
+                </motion.span>
+              </motion.button>
+            </div>
+          </div>
+        </motion.div>
       </div>
     </section>
   );
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// SECTION 8 — CTA
+// SECTION 7 — CTA
 // ════════════════════════════════════════════════════════════════════════════════
-function CtaSection({ onNavigate, totalMembers }: { onNavigate: (p: 'register' | 'members' | 'privacy') => void; totalMembers: number }) {
+function CtaSection({ onNavigate, totalMembers }: {
+  onNavigate: (p: 'register' | 'members' | 'privacy' | 'familyTree') => void;
+  totalMembers: number;
+}) {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: '-80px' });
 
@@ -1251,7 +819,7 @@ function CtaSection({ onNavigate, totalMembers }: { onNavigate: (p: 'register' |
             onClick={() => onNavigate('register')}
             className="bg-gradient-to-r from-orange-500 to-rose-600 text-white px-12 py-5 rounded-2xl font-black text-xl shadow-2xl shadow-orange-500/30"
           >
-            ✨ Start Celebrating Today
+            ✨ Add a Member
           </motion.button>
           <motion.button
             whileHover={{ scale: 1.04, y: -3 }}
@@ -1260,6 +828,14 @@ function CtaSection({ onNavigate, totalMembers }: { onNavigate: (p: 'register' |
             className="bg-white/10 backdrop-blur border border-white/25 text-white px-10 py-5 rounded-2xl font-bold text-lg hover:bg-white/20 transition-colors"
           >
             👨‍👩‍👧 View Members
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.04, y: -3 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={() => onNavigate('familyTree')}
+            className="bg-white/10 backdrop-blur border border-white/25 text-white px-10 py-5 rounded-2xl font-bold text-lg hover:bg-white/20 transition-colors"
+          >
+            🌳 Family Tree
           </motion.button>
         </motion.div>
       </div>
@@ -1270,7 +846,10 @@ function CtaSection({ onNavigate, totalMembers }: { onNavigate: (p: 'register' |
 // ════════════════════════════════════════════════════════════════════════════════
 // FOOTER
 // ════════════════════════════════════════════════════════════════════════════════
-function Footer({ onNavigate, total }: { onNavigate: (p: 'register' | 'members' | 'privacy') => void; total: number }) {
+function Footer({ onNavigate, total }: {
+  onNavigate: (p: 'register' | 'members' | 'privacy' | 'familyTree') => void;
+  total: number;
+}) {
   return (
     <footer className="bg-gray-950 text-white/50 py-12 px-6">
       <div className="max-w-5xl mx-auto grid md:grid-cols-3 gap-8 mb-8">
@@ -1284,6 +863,7 @@ function Footer({ onNavigate, total }: { onNavigate: (p: 'register' | 'members' 
           <div className="space-y-2 text-sm">
             <button onClick={() => onNavigate('register')} className="block hover:text-orange-400 transition-colors">🎉 Add Member</button>
             <button onClick={() => onNavigate('members')} className="block hover:text-orange-400 transition-colors">👥 All Members</button>
+            <button onClick={() => onNavigate('familyTree')} className="block hover:text-orange-400 transition-colors">🌳 Family Tree</button>
             <button onClick={() => onNavigate('privacy')} className="block hover:text-orange-400 transition-colors">🔒 Privacy Policy</button>
           </div>
         </div>
@@ -1393,9 +973,8 @@ export default function Home({ onNavigate }: HomeProps) {
       <TodaySection members={members} />
       <MonthSection members={members} />
       <UpcomingSection members={members} />
-      <FamilyTreeSection members={members} />
-      <MembersPreview members={members} onNavigate={onNavigate} />
       <StatsSection members={members} />
+      <FamilyTreeBanner onNavigate={onNavigate} />
       <CtaSection onNavigate={onNavigate} totalMembers={members.length} />
       <Footer onNavigate={onNavigate} total={members.length} />
     </div>
