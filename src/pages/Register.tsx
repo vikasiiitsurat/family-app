@@ -219,42 +219,46 @@ export default function Register() {
     e.preventDefault();
     setError('');
     setLoading(true);
+    const showSubmitError = (message: string) => {
+      setError(message);
+      window.alert(message);
+    };
 
     // Validations
     if (!formData.gender) {
-      setError('Please select your gender.');
+      showSubmitError('Please select your gender.');
       setLoading(false);
       return;
     }
     if (!/^[0-9]{10}$/.test(formData.phone)) {
-      setError('Phone number must be exactly 10 digits.');
+      showSubmitError('Phone number must be exactly 10 digits.');
       setLoading(false);
       return;
     }
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      setError('Please enter a valid email address.');
+      showSubmitError('Please enter a valid email address.');
       setLoading(false);
       return;
     }
     if (formData.whatsapp && !/^[0-9]{10}$/.test(formData.whatsapp)) {
-      setError('WhatsApp number must be exactly 10 digits.');
+      showSubmitError('WhatsApp number must be exactly 10 digits.');
       setLoading(false);
       return;
     }
     if (formData.instagram && !/^[a-zA-Z0-9._]{1,30}$/.test(formData.instagram)) {
-      setError('Instagram ID can only contain letters, numbers, dots, and underscores (max 30 characters).');
+      showSubmitError('Instagram ID can only contain letters, numbers, dots, and underscores (max 30 characters).');
       setLoading(false);
       return;
     }
     if (formData.isMarried && !formData.spouseName.trim()) {
-      setError('Please enter your spouse name.');
+      showSubmitError('Please enter your spouse name.');
       setLoading(false);
       return;
     }
     // Parents required only if NOT (female + married)
     if (showParentsFields) {
       if (!formData.fathersName.trim() || !formData.mothersName.trim()) {
-        setError("Please enter both father's and mother's name.");
+        showSubmitError("Please enter both father's and mother's name.");
         setLoading(false);
         return;
       }
@@ -265,7 +269,7 @@ export default function Register() {
       if (photoFile) {
         const uploadedUrl = await uploadPhoto(photoFile);
         if (!uploadedUrl) {
-          setError('Failed to upload photo. Please try again.');
+          showSubmitError('Failed to upload photo. Please try again.');
           setLoading(false);
           return;
         }
@@ -295,7 +299,7 @@ export default function Register() {
       if (activeTab === 'register') {
         const { error: insertError } = await supabase.from('members').insert([{ ...payload, timezone }]);
         if (insertError) {
-          setError(
+          showSubmitError(
             insertError.code === '23505'
               ? 'This email or phone is already registered!'
               : 'Registration failed. Please try again.'
@@ -307,7 +311,7 @@ export default function Register() {
       } else {
         const { error: updateError } = await supabase.from('members').update(payload).eq('email', originalEmail);
         if (updateError) {
-          setError(
+          showSubmitError(
             updateError.code === '23505'
               ? 'This email is already taken by another user!'
               : 'Update failed. Please try again.'
@@ -326,7 +330,7 @@ export default function Register() {
       setFormData(emptyForm);
       setTimeout(() => setSuccess(false), 4000);
     } catch {
-      setError('An unexpected error occurred.');
+      showSubmitError('An unexpected error occurred.');
     } finally {
       setLoading(false);
     }

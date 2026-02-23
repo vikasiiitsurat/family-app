@@ -42,23 +42,23 @@ interface TreeNode {
 
 // ─── THEME ────────────────────────────────────────────────────────────────────
 const T = {
-  bg:            '#160410',
-  bgCard:        '#1f0718',
-  border:        'rgba(219,39,119,0.22)',
-  borderStrong:  'rgba(219,39,119,0.50)',
-  primary:       '#db2777',
-  primaryLight:  '#f472b6',
-  primaryDim:    'rgba(244,114,182,0.55)',
-  maroon:        '#831843',
-  surface:       'rgba(255,255,255,0.055)',
-  surfaceHover:  'rgba(255,255,255,0.09)',
-  text:          'rgba(255,255,255,0.92)',
-  textMuted:     'rgba(255,255,255,0.48)',
-  textDim:       'rgba(255,255,255,0.24)',
-  ghost:         'rgba(251,191,36,0.55)',
-  ghostBorder:   'rgba(251,191,36,0.32)',
-  linkLine:      'rgba(190,24,93,0.55)',
-  coupleLine:    'rgba(244,114,182,0.50)',
+  bg:            '#fff8fc',
+  bgCard:        '#ffffff',
+  border:        'rgba(190,24,93,0.22)',
+  borderStrong:  'rgba(190,24,93,0.44)',
+  primary:       '#be185d',
+  primaryLight:  '#db2777',
+  primaryDim:    'rgba(190,24,93,0.68)',
+  maroon:        '#9d174d',
+  surface:       'rgba(255,255,255,0.88)',
+  surfaceHover:  'rgba(252,231,243,0.9)',
+  text:          '#3b0a24',
+  textMuted:     'rgba(59,10,36,0.72)',
+  textDim:       'rgba(59,10,36,0.52)',
+  ghost:         'rgba(180,83,9,0.95)',
+  ghostBorder:   'rgba(217,119,6,0.45)',
+  linkLine:      'rgba(190,24,93,0.45)',
+  coupleLine:    'rgba(219,39,119,0.55)',
 };
 
 const AVATAR_PALETTES: [string, string][] = [
@@ -114,7 +114,7 @@ function buildTree(members: Member[]): TreeNode[] {
     const k = normalizeName(name);
     if (!ghosts.has(k)) {
       gc--;
-      ghosts.set(k, { id: `ghost_${gc}`, name: name.trim(), email: '', dob: '1970-01-01', phone: '', qualification: '', current_status: 'Not Registered', profile_photo: null, fathers_name: null, mothers_name: null, spouse_name: null, anniversary: null });
+      ghosts.set(k, { id: `ghost_${gc}`, name: name.trim(), email: '', dob: '', phone: '', qualification: '', current_status: 'Not Registered', profile_photo: null, fathers_name: null, mothers_name: null, spouse_name: null, anniversary: null });
     }
     return ghosts.get(k)!;
   };
@@ -254,7 +254,7 @@ function Tooltip({ member, ghost }: { member: Member; ghost: boolean }) {
       style={{ width: 240 }}
     >
       <div className="rounded-2xl overflow-hidden shadow-2xl"
-        style={{ background: T.bgCard, border: `1px solid ${ghost ? T.ghostBorder : T.borderStrong}`, boxShadow: '0 20px 50px rgba(0,0,0,0.65)' }}>
+        style={{ background: T.bgCard, border: `1px solid ${ghost ? T.ghostBorder : T.borderStrong}`, boxShadow: '0 12px 28px rgba(190,24,93,0.16)' }}>
         <div className="h-[3px]" style={{ background: ghost ? 'linear-gradient(90deg,#92400e,#d97706)' : `linear-gradient(90deg,${T.maroon},${T.primary},${T.primaryLight})` }} />
         <div className="p-4">
           <div className="flex items-center gap-3 mb-3">
@@ -274,7 +274,7 @@ function Tooltip({ member, ghost }: { member: Member; ghost: boolean }) {
                   {bday ? '🎂 Birthday Today!' : '💍 Anniversary Today!'}
                 </div>
               )}
-              <Row icon="🎂" v={`${fmtDate(member.dob)} · Age ${getAge(member.dob)}`} />
+              {member.dob && <Row icon="🎂" v={`${fmtDate(member.dob)} · Age ${getAge(member.dob)}`} />}
               {member.anniversary && <Row icon="💍" v={`${getYearsMarried(member.anniversary)}y married`} />}
               {member.qualification && <Row icon="🎓" v={member.qualification} />}
               {member.phone && <Row icon="📱" v={member.phone} />}
@@ -336,13 +336,19 @@ function MemberNode({ member, ghost, depth }: { member: Member; ghost: boolean; 
       </motion.div>
 
       <p
-        className="mt-1.5 text-[10px] font-semibold text-center leading-snug break-words"
-        style={{ maxWidth: 108, color: hov ? (ghost ? '#fbbf24' : T.primaryLight) : (ghost ? T.ghost : T.text) }}
+        className="mt-2 px-2 py-0.5 text-[11px] font-semibold text-center leading-snug break-words rounded-md"
+        style={{
+          maxWidth: 116,
+          color: hov ? (ghost ? '#92400e' : T.primary) : (ghost ? T.ghost : T.text),
+          background: ghost ? 'rgba(255,247,237,0.94)' : 'rgba(255,255,255,0.94)',
+          border: `1px solid ${ghost ? 'rgba(217,119,6,0.32)' : 'rgba(190,24,93,0.20)'}`,
+          boxShadow: '0 2px 10px rgba(190,24,93,0.08)',
+        }}
       >
         {member.name}
       </p>
 
-      {ghost && <p className="text-[8px] italic" style={{ color: 'rgba(251,191,36,0.38)' }}>unregistered</p>}
+      {ghost && <p className="text-[9px] italic" style={{ color: 'rgba(180,83,9,0.72)' }}>unregistered</p>}
       {cel && <span className="text-[11px] mt-0.5">{isToday(member.dob) ? '🎂' : '💍'}</span>}
 
       <AnimatePresence>{hov && <Tooltip member={member} ghost={ghost} />}</AnimatePresence>
@@ -442,7 +448,7 @@ function SearchOverlay({ members, onClose }: { members: Member[]; onClose: () =>
 
   return (
     <motion.div className="absolute inset-0 z-50 flex items-start justify-center pt-14 px-4"
-      style={{ background: 'rgba(8,0,6,0.78)', backdropFilter: 'blur(6px)' }}
+      style={{ background: 'rgba(255,245,250,0.84)', backdropFilter: 'blur(6px)' }}
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
       <motion.div className="w-full max-w-md" initial={{ y: -18, opacity: 0 }} animate={{ y: 0, opacity: 1 }} onClick={e => e.stopPropagation()}>
         <div className="rounded-2xl overflow-hidden shadow-2xl" style={{ background: T.bgCard, border: `1px solid ${T.borderStrong}` }}>
@@ -450,7 +456,7 @@ function SearchOverlay({ members, onClose }: { members: Member[]; onClose: () =>
             <span>🔍</span>
             <input autoFocus className="flex-1 bg-transparent outline-none text-sm" style={{ color: T.text }}
               placeholder="Search members…" value={q} onChange={e => setQ(e.target.value)} />
-            <button onClick={onClose} style={{ color: T.textDim }} className="text-lg leading-none hover:text-white">✕</button>
+            <button onClick={onClose} style={{ color: T.textDim }} className="text-lg leading-none hover:text-pink-700">✕</button>
           </div>
           {filtered.length > 0 && (
             <div className="max-h-72 overflow-y-auto">
@@ -492,7 +498,7 @@ function StatsSidebar({ members, onClose }: { members: Member[]; onClose: () => 
       <div className="p-5">
         <div className="flex items-center justify-between mb-5">
           <h3 className="font-bold text-sm" style={{ color: T.text }}>Family Insights</h3>
-          <button onClick={onClose} style={{ color: T.textDim }} className="text-lg leading-none hover:text-white">✕</button>
+          <button onClick={onClose} style={{ color: T.textDim }} className="text-lg leading-none hover:text-pink-700">✕</button>
         </div>
 
         <div className="space-y-2 mb-5">
@@ -657,21 +663,21 @@ export default function FamilyTreePage({ onNavigate }: { onNavigate?: (page: str
 
   return (
     <div className="relative w-full overflow-hidden"
-      style={{ background: `radial-gradient(ellipse 90% 70% at 20% 15%, #2a0a1c 0%, ${T.bg} 55%, #0e020b 100%)`, height: 'calc(100vh - 120px)' }}>
+      style={{ background: 'radial-gradient(ellipse 92% 72% at 20% 12%, #fff7fb 0%, #ffe7f3 52%, #ffd8ea 100%)', height: 'calc(100vh - 70px)' }}>
 
       {/* Very subtle ambient — just two soft blobs, no particles */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-0 right-0 w-80 h-64 rounded-full opacity-[0.06] blur-3xl"
-          style={{ background: 'radial-gradient(circle, #db2777 0%, transparent 70%)' }} />
-        <div className="absolute bottom-0 left-0 w-60 h-60 rounded-full opacity-[0.04] blur-3xl"
-          style={{ background: 'radial-gradient(circle, #be185d 0%, transparent 70%)' }} />
+        <div className="absolute top-0 right-0 w-80 h-64 rounded-full opacity-[0.16] blur-3xl"
+          style={{ background: 'radial-gradient(circle, #f9a8d4 0%, transparent 70%)' }} />
+        <div className="absolute bottom-0 left-0 w-60 h-60 rounded-full opacity-[0.14] blur-3xl"
+          style={{ background: 'radial-gradient(circle, #f472b6 0%, transparent 70%)' }} />
       </div>
 
       {/* Header controls */}
       <div className="absolute top-4 right-4 z-30 flex items-center gap-2">
         <motion.button
           className="flex items-center gap-1.5 text-xs font-medium rounded-xl px-3 py-2"
-          style={{ color: T.textMuted, background: T.surface, border: `1px solid rgba(255,255,255,0.08)` }}
+          style={{ color: T.textMuted, background: T.surface, border: `1px solid ${T.border}` }}
           onClick={() => setShowSearch(s => !s)} whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}>
           🔍 Search
         </motion.button>
@@ -685,7 +691,7 @@ export default function FamilyTreePage({ onNavigate }: { onNavigate?: (page: str
 
       {/* Legend */}
       <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-wrap items-center justify-center gap-5 px-6 py-2.5"
-        style={{ background: 'rgba(12,2,9,0.82)', borderTop: `1px solid rgba(219,39,119,0.1)`, backdropFilter: 'blur(8px)' }}>
+        style={{ background: 'rgba(255,250,253,0.95)', borderTop: `1px solid rgba(190,24,93,0.16)`, backdropFilter: 'blur(8px)' }}>
         {[
           { icon: '💕', text: 'Married couple' },
           { icon: '🎂', text: "Today's birthday" },

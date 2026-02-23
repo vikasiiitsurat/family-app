@@ -4,7 +4,6 @@ import {
   Mail, Phone, GraduationCap, Briefcase, Calendar, Heart,
   ExternalLink, Star, User, Zap, Copy, Check, Users,
   Filter, ChevronDown, Facebook, UserCheck, Globe,
-  Baby, Crown, HeartHandshake
 } from 'lucide-react';
 import { supabase, Member } from '../lib/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -65,29 +64,6 @@ function isMarried(member: Member): boolean {
 
 function isLateName(name?: string): boolean {
   return /^late\b/i.test((name || '').trim());
-}
-
-function getRoleBadge(member: Member): { label: string; icon: React.ReactNode; color: string } | null {
-  if (member.fathers_name && !member.mothers_name && !member.spouse_name) {
-    return { label: 'Son', icon: <Baby size={10} />, color: 'bg-sky-100 text-sky-700 border-sky-200' };
-  }
-  if (member.spouse_name) {
-    const isMale = member.gender?.toLowerCase() === 'male';
-    return {
-      label: isMale ? 'Husband' : 'Wife',
-      icon: <HeartHandshake size={10} />,
-      color: 'bg-rose-100 text-rose-700 border-rose-200',
-    };
-  }
-  if (member.mothers_name || member.fathers_name) {
-    const isMale = member.gender?.toLowerCase() === 'male';
-    return {
-      label: isMale ? 'Father' : 'Mother',
-      icon: <Crown size={10} />,
-      color: 'bg-amber-100 text-amber-700 border-amber-200',
-    };
-  }
-  return null;
 }
 
 function getUpcomingBirthdays(members: Member[]): Member[] {
@@ -157,7 +133,6 @@ function MemberCard({ member, index, isExpanded, onToggle, copiedField, onCopy }
   const isAnniversary = isTodayAnniversary(member.anniversary);
   const isCelebrating = isBirthday || isAnniversary;
   const newMember = isNewMember(member.created_at);
-  const roleBadge = getRoleBadge(member);
   const zodiac = member.dob ? getZodiac(member.dob) : null;
   const age = member.dob ? getAge(member.dob) : null;
   const married = isMarried(member);
@@ -293,11 +268,6 @@ function MemberCard({ member, index, isExpanded, onToggle, copiedField, onCopy }
 
           {/* Badges row */}
           <div className="flex flex-wrap items-center justify-center gap-1.5 mb-2">
-            {roleBadge && (
-              <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${roleBadge.color}`}>
-                {roleBadge.icon} {roleBadge.label}
-              </span>
-            )}
             {married && (
               <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-pink-100 text-pink-700 border border-pink-200">
                 <Heart size={10} className="fill-pink-500 text-pink-500" /> Married
@@ -429,44 +399,6 @@ function MemberCard({ member, index, isExpanded, onToggle, copiedField, onCopy }
                   </motion.div>
                 )}
               </motion.div>
-
-              {/* Family */}
-              {(member.fathers_name || member.mothers_name || member.spouse_name) && (
-                <motion.div initial={{ x: 15 }} animate={{ x: 0 }} transition={{ delay: 0.15 }}
-                  className="bg-gradient-to-br from-rose-50 to-pink-50 rounded-2xl p-4 border-2 border-rose-100 shadow space-y-2"
-                >
-                  <h4 className="font-bold text-rose-700 flex items-center gap-2 text-sm mb-3">
-                    <HeartHandshake size={15} /> Family
-                  </h4>
-                  {member.fathers_name && (
-                    <div className="flex items-center gap-2 bg-white/60 p-2.5 rounded-xl">
-                      <Crown size={14} className="text-amber-500" />
-                      <div>
-                        <p className="text-[10px] text-gray-500 font-semibold">Father's Name</p>
-                        <p className="text-xs font-bold text-gray-800">{member.fathers_name}</p>
-                      </div>
-                    </div>
-                  )}
-                  {member.mothers_name && (
-                    <div className="flex items-center gap-2 bg-white/60 p-2.5 rounded-xl">
-                      <Heart size={14} className="text-rose-500 fill-rose-400" />
-                      <div>
-                        <p className="text-[10px] text-gray-500 font-semibold">Mother's Name</p>
-                        <p className="text-xs font-bold text-gray-800">{member.mothers_name}</p>
-                      </div>
-                    </div>
-                  )}
-                  {member.spouse_name && (
-                    <div className="flex items-center gap-2 bg-white/60 p-2.5 rounded-xl">
-                      <HeartHandshake size={14} className="text-pink-500" />
-                      <div>
-                        <p className="text-[10px] text-gray-500 font-semibold">Spouse</p>
-                        <p className="text-xs font-bold text-gray-800">{member.spouse_name}</p>
-                      </div>
-                    </div>
-                  )}
-                </motion.div>
-              )}
 
               {/* Professional */}
               <motion.div initial={{ x: -15 }} animate={{ x: 0 }} transition={{ delay: 0.2 }}
