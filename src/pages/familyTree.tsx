@@ -562,6 +562,7 @@ function TreeCanvas({ trees, members }: { trees: TreeNode[]; members: Member[] }
   const [pan, setPan] = useState({ x: 60, y: 50 });
   const [isDragging, setIsDragging] = useState(false);
   const drag = useRef({ x: 0, y: 0, px: 0, py: 0 });
+  const canvasRef = useRef<HTMLDivElement | null>(null);
 
   const [expanded, setExpanded] = useState<Set<string>>(() => {
     const s = new Set<string>();
@@ -589,13 +590,50 @@ function TreeCanvas({ trees, members }: { trees: TreeNode[]; members: Member[] }
   const paths: JSX.Element[] = [], nodes: JSX.Element[] = [];
   layouts.forEach(l => renderTree(l, 0, paths, nodes, expanded, toggle));
 
+  const fitToView = useCallback(() => {
+    const el = canvasRef.current;
+    if (!el || !tw || !th) return;
+    const pad = window.innerWidth < 768 ? 22 : 48;
+    const zx = (el.clientWidth - pad * 2) / tw;
+    const zy = (el.clientHeight - pad * 2) / th;
+    const nextZoom = Math.max(0.3, Math.min(1.1, Math.min(zx, zy)));
+    setZoom(nextZoom);
+    setPan({
+      x: (el.clientWidth - tw * nextZoom) / 2,
+      y: Math.max(10, (el.clientHeight - th * nextZoom) / 2),
+    });
+  }, [tw, th]);
+
+  useEffect(() => {
+    fitToView();
+  }, [fitToView]);
+
+  useEffect(() => {
+    const onResize = () => fitToView();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [fitToView]);
+
   return (
-    <div className="w-full h-full overflow-hidden relative"
-      style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+    <div ref={canvasRef} className="w-full h-full overflow-hidden relative"
+      style={{ cursor: isDragging ? 'grabbing' : 'grab', touchAction: 'none' }}
       onMouseDown={e => { if (e.button !== 0) return; setIsDragging(true); drag.current = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y }; }}
       onMouseMove={e => { if (isDragging) setPan({ x: drag.current.px + e.clientX - drag.current.x, y: drag.current.py + e.clientY - drag.current.y }); }}
       onMouseUp={() => setIsDragging(false)}
       onMouseLeave={() => setIsDragging(false)}
+      onTouchStart={e => {
+        const t = e.touches[0];
+        if (!t) return;
+        setIsDragging(true);
+        drag.current = { x: t.clientX, y: t.clientY, px: pan.x, py: pan.y };
+      }}
+      onTouchMove={e => {
+        const t = e.touches[0];
+        if (!t || !isDragging) return;
+        e.preventDefault();
+        setPan({ x: drag.current.px + t.clientX - drag.current.x, y: drag.current.py + t.clientY - drag.current.y });
+      }}
+      onTouchEnd={() => setIsDragging(false)}
       onWheel={e => { e.preventDefault(); setZoom(z => Math.min(2, Math.max(0.3, z - e.deltaY * 0.001))); }}
     >
       <div style={{ transform: `translate(${pan.x}px,${pan.y}px) scale(${zoom})`, transformOrigin: '0 0', position: 'absolute', width: tw, height: th }}>
@@ -608,7 +646,7 @@ function TreeCanvas({ trees, members }: { trees: TreeNode[]; members: Member[] }
       {/* Zoom controls */}
       <div className="absolute bottom-5 right-5 z-20 flex flex-col gap-1.5">
         {[{ l: '+', fn: () => setZoom(z => Math.min(2, z + 0.15)) },
-          { l: '⟳', fn: () => { setZoom(0.9); setPan({ x: 60, y: 50 }); } },
+          { l: '⟳', fn: fitToView },
           { l: '−', fn: () => setZoom(z => Math.max(0.3, z - 0.15)) }].map(b => (
           <button key={b.l} onClick={b.fn}
             className="w-9 h-9 rounded-xl font-bold text-base flex items-center justify-center hover:scale-110 transition-transform"
@@ -690,7 +728,7 @@ export default function FamilyTreePage({ onNavigate }: { onNavigate?: (page: str
       </div>
 
       {/* Legend */}
-      <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-wrap items-center justify-center gap-5 px-6 py-2.5"
+      <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-nowrap md:flex-wrap items-center justify-start md:justify-center gap-4 px-4 md:px-6 py-2.5 overflow-x-auto"
         style={{ background: 'rgba(255,250,253,0.95)', borderTop: `1px solid rgba(190,24,93,0.16)`, backdropFilter: 'blur(8px)' }}>
         {[
           { icon: '💕', text: 'Married couple' },
@@ -699,7 +737,7 @@ export default function FamilyTreePage({ onNavigate }: { onNavigate?: (page: str
           { swatch: T.linkLine, text: 'Family link' },
           { text: '🖱 Drag · Scroll = zoom · Hover for details' },
         ].map((l, i) => (
-          <div key={i} className="flex items-center gap-1.5 text-[10px]" style={{ color: T.textDim }}>
+          <div key={i} className="flex items-center gap-1.5 text-[10px] whitespace-nowrap flex-shrink-0" style={{ color: T.textDim }}>
             {l.icon && <span>{l.icon}</span>}
             {l.swatch && <div className="w-5 h-px rounded" style={{ background: l.swatch }} />}
             <span>{l.text}</span>
@@ -708,7 +746,7 @@ export default function FamilyTreePage({ onNavigate }: { onNavigate?: (page: str
       </div>
 
       {/* Main canvas */}
-      <div className="absolute inset-0 pb-10" style={{ zIndex: 10 }}>
+      <div className="absolute inset-0 pb-16 md:pb-10" style={{ zIndex: 10 }}>
         {loading ? (
           <div className="flex flex-col items-center justify-center h-full gap-5">
             <motion.div className="text-5xl" animate={{ rotate: 360 }} transition={{ duration: 2.5, repeat: Infinity, ease: 'linear' }}>🌸</motion.div>
