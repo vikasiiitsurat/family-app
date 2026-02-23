@@ -561,13 +561,19 @@ function TreeCanvas({ trees, members }: { trees: TreeNode[]; members: Member[] }
   const [zoom, setZoom] = useState(0.9);
   const [pan, setPan] = useState({ x: 60, y: 50 });
   const [isDragging, setIsDragging] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const drag = useRef({ x: 0, y: 0, px: 0, py: 0 });
   const canvasRef = useRef<HTMLDivElement | null>(null);
+  const pinch = useRef({ active: false, startDist: 0, startZoom: 1, worldX: 0, worldY: 0 });
 
   const [expanded, setExpanded] = useState<Set<string>>(() => {
+    const mobileInit = typeof window !== 'undefined' && window.innerWidth < 768;
     const s = new Set<string>();
-    const col = (n: TreeNode) => { s.add(n.coupleKey); n.children.forEach(col); };
-    trees.forEach(col);
+    const col = (n: TreeNode, depth: number) => {
+      if (!mobileInit || depth <= 1) s.add(n.coupleKey);
+      n.children.forEach(c => col(c, depth + 1));
+    };
+    trees.forEach(t => col(t, 0));
     return s;
   });
 
@@ -614,6 +620,12 @@ function TreeCanvas({ trees, members }: { trees: TreeNode[]; members: Member[] }
     return () => window.removeEventListener('resize', onResize);
   }, [fitToView]);
 
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   return (
     <div ref={canvasRef} className="w-full h-full overflow-hidden relative"
       style={{ cursor: isDragging ? 'grabbing' : 'grab', touchAction: 'none' }}
@@ -622,18 +634,56 @@ function TreeCanvas({ trees, members }: { trees: TreeNode[]; members: Member[] }
       onMouseUp={() => setIsDragging(false)}
       onMouseLeave={() => setIsDragging(false)}
       onTouchStart={e => {
+        if (e.touches.length === 2) {
+          const t1 = e.touches[0];
+          const t2 = e.touches[1];
+          const dx = t2.clientX - t1.clientX;
+          const dy = t2.clientY - t1.clientY;
+          const dist = Math.hypot(dx, dy);
+          const cx = (t1.clientX + t2.clientX) / 2;
+          const cy = (t1.clientY + t2.clientY) / 2;
+          pinch.current = {
+            active: true,
+            startDist: dist,
+            startZoom: zoom,
+            worldX: (cx - pan.x) / zoom,
+            worldY: (cy - pan.y) / zoom,
+          };
+          setIsDragging(false);
+          return;
+        }
         const t = e.touches[0];
         if (!t) return;
         setIsDragging(true);
         drag.current = { x: t.clientX, y: t.clientY, px: pan.x, py: pan.y };
       }}
       onTouchMove={e => {
+        if (pinch.current.active && e.touches.length === 2) {
+          const t1 = e.touches[0];
+          const t2 = e.touches[1];
+          const dx = t2.clientX - t1.clientX;
+          const dy = t2.clientY - t1.clientY;
+          const dist = Math.hypot(dx, dy);
+          const cx = (t1.clientX + t2.clientX) / 2;
+          const cy = (t1.clientY + t2.clientY) / 2;
+          const nextZoom = Math.min(2, Math.max(0.3, pinch.current.startZoom * (dist / Math.max(1, pinch.current.startDist))));
+          e.preventDefault();
+          setZoom(nextZoom);
+          setPan({
+            x: cx - pinch.current.worldX * nextZoom,
+            y: cy - pinch.current.worldY * nextZoom,
+          });
+          return;
+        }
         const t = e.touches[0];
         if (!t || !isDragging) return;
         e.preventDefault();
         setPan({ x: drag.current.px + t.clientX - drag.current.x, y: drag.current.py + t.clientY - drag.current.y });
       }}
-      onTouchEnd={() => setIsDragging(false)}
+      onTouchEnd={e => {
+        if (e.touches.length < 2) pinch.current.active = false;
+        if (e.touches.length === 0) setIsDragging(false);
+      }}
       onWheel={e => { e.preventDefault(); setZoom(z => Math.min(2, Math.max(0.3, z - e.deltaY * 0.001))); }}
     >
       <div style={{ transform: `translate(${pan.x}px,${pan.y}px) scale(${zoom})`, transformOrigin: '0 0', position: 'absolute', width: tw, height: th }}>
@@ -649,7 +699,7 @@ function TreeCanvas({ trees, members }: { trees: TreeNode[]; members: Member[] }
           { l: '⟳', fn: fitToView },
           { l: '−', fn: () => setZoom(z => Math.max(0.3, z - 0.15)) }].map(b => (
           <button key={b.l} onClick={b.fn}
-            className="w-9 h-9 rounded-xl font-bold text-base flex items-center justify-center hover:scale-110 transition-transform"
+            className={`${isMobile ? 'w-10 h-10 text-lg' : 'w-9 h-9 text-base'} rounded-xl font-bold flex items-center justify-center hover:scale-110 transition-transform`}
             style={{ background: 'rgba(190,24,93,0.14)', border: `1px solid ${T.border}`, color: T.primaryLight }}>
             {b.l}
           </button>
@@ -658,6 +708,12 @@ function TreeCanvas({ trees, members }: { trees: TreeNode[]; members: Member[] }
       <div className="absolute bottom-5 left-5 z-20 text-[11px] font-semibold" style={{ color: T.primaryDim }}>
         {Math.round(zoom * 100)}%
       </div>
+      {isMobile && (
+        <div className="absolute top-3 left-3 z-20 text-[10px] px-2.5 py-1 rounded-full"
+          style={{ background: 'rgba(255,255,255,0.92)', border: `1px solid ${T.border}`, color: T.textMuted }}>
+          Drag with 1 finger • Pinch with 2 fingers
+        </div>
+      )}
     </div>
   );
 }
@@ -728,7 +784,7 @@ export default function FamilyTreePage({ onNavigate }: { onNavigate?: (page: str
       </div>
 
       {/* Legend */}
-      <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-nowrap md:flex-wrap items-center justify-start md:justify-center gap-4 px-4 md:px-6 py-2.5 overflow-x-auto"
+      <div className="hidden md:flex absolute bottom-0 left-0 right-0 z-20 flex-nowrap md:flex-wrap items-center justify-start md:justify-center gap-4 px-4 md:px-6 py-2.5 overflow-x-auto"
         style={{ background: 'rgba(255,250,253,0.95)', borderTop: `1px solid rgba(190,24,93,0.16)`, backdropFilter: 'blur(8px)' }}>
         {[
           { icon: '💕', text: 'Married couple' },
@@ -746,7 +802,7 @@ export default function FamilyTreePage({ onNavigate }: { onNavigate?: (page: str
       </div>
 
       {/* Main canvas */}
-      <div className="absolute inset-0 pb-16 md:pb-10" style={{ zIndex: 10 }}>
+      <div className="absolute inset-0 pb-4 md:pb-10" style={{ zIndex: 10 }}>
         {loading ? (
           <div className="flex flex-col items-center justify-center h-full gap-5">
             <motion.div className="text-5xl" animate={{ rotate: 360 }} transition={{ duration: 2.5, repeat: Infinity, ease: 'linear' }}>🌸</motion.div>
