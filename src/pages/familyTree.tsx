@@ -566,16 +566,21 @@ function TreeCanvas({ trees, members }: { trees: TreeNode[]; members: Member[] }
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const pinch = useRef({ active: false, startDist: 0, startZoom: 1, worldX: 0, worldY: 0 });
 
-  const [expanded, setExpanded] = useState<Set<string>>(() => {
-    const mobileInit = typeof window !== 'undefined' && window.innerWidth < 768;
-    const s = new Set<string>();
-    const col = (n: TreeNode, depth: number) => {
-      if (!mobileInit || depth <= 1) s.add(n.coupleKey);
-      n.children.forEach(c => col(c, depth + 1));
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const allCoupleKeys = useMemo(() => {
+    const keys = new Set<string>();
+    const collect = (node: TreeNode) => {
+      keys.add(node.coupleKey);
+      node.children.forEach(collect);
     };
-    trees.forEach(t => col(t, 0));
-    return s;
-  });
+    trees.forEach(collect);
+    return keys;
+  }, [trees]);
+
+  useEffect(() => {
+    setExpanded(new Set(allCoupleKeys));
+  }, [allCoupleKeys]);
 
   const toggle = useCallback((k: string) => {
     setExpanded(prev => { const next = new Set(prev); next.has(k) ? next.delete(k) : next.add(k); return next; });
