@@ -609,9 +609,34 @@ function TreeCanvas({ trees }: { trees: TreeNode[] }) {
     return { tw: mx + 100, th: my + 120 };
   }, [layouts]);
 
+  const fitToView = useCallback(() => {
+    const element = canvasRef.current;
+    if (!element) return;
+
+    const padding = isMobile ? 20 : 40;
+    const availableWidth = Math.max(element.clientWidth - padding * 2, 1);
+    const availableHeight = Math.max(element.clientHeight - padding * 2, 1);
+    const nextZoom = Math.max(0.3, Math.min(1.2, Math.min(availableWidth / tw, availableHeight / th)));
+
+    setZoom(nextZoom);
+    setPan({
+      x: (element.clientWidth - tw * nextZoom) / 2,
+      y: Math.max((element.clientHeight - th * nextZoom) / 2, padding / 2),
+    });
+  }, [isMobile, th, tw]);
+
   const paths: JSX.Element[] = [], nodes: JSX.Element[] = [];
   layouts.forEach(l => renderTree(l, 0, paths, nodes, expanded, toggle));
 
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     const element = canvasRef.current;
@@ -626,6 +651,10 @@ function TreeCanvas({ trees }: { trees: TreeNode[] }) {
     return () => element.removeEventListener('wheel', handleWheel);
 
   }, []);
+
+  useEffect(() => {
+    fitToView();
+  }, [fitToView]);
 
   return (
     <div ref={canvasRef} className="w-full h-full overflow-hidden relative"
