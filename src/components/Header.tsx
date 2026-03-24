@@ -1,8 +1,8 @@
 import { Home, UserPlus, Users, Heart } from 'lucide-react';
 
 interface HeaderProps {
-  currentPage: 'home' | 'register' | 'members' | 'familyTree';
-  onNavigate: (page: 'home' | 'register' | 'members' | 'familyTree') => void;
+  currentPage: 'home' | 'register' | 'members' | 'privacy' | 'familyTree';
+  onNavigate: (page: 'home' | 'register' | 'members' | 'privacy' | 'familyTree') => void;
 }
 
 export default function Header({ currentPage, onNavigate }: HeaderProps) {

@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import {
   UserPlus, CheckCircle, Edit3, Search, RefreshCw,
-  Linkedin, Instagram, MessageCircle, Sparkles, Camera, X,
-  Heart, Users, ChevronDown, Facebook
+  Linkedin, MessageCircle, Sparkles, Camera, X,
+  Heart, Users, ChevronDown
 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { resolveMemberPhotoUrl, supabase } from '../lib/supabase';
 import Confetti from '../components/Confetti';
 import Flatpickr from "react-flatpickr";
 import "flatpickr/dist/themes/material_blue.css";
@@ -27,17 +27,54 @@ interface MemberRecord {
   anniversary?: string;
   linkedin?: string;
   whatsapp?: string;
-  instagram?: string;
-  facebook?: string;
   profile_photo?: string;
   fathers_name?: string;
   mothers_name?: string;
   spouse_name?: string;
 }
 
+type FormState = {
+  name: string;
+  email: string;
+  dob: string;
+  phone: string;
+  qualification: string;
+  currentStatus: string;
+  gender: Gender;
+  anniversary: string;
+  linkedin: string;
+  whatsapp: string;
+  profilePhoto: string;
+  fathersName: string;
+  mothersName: string;
+  spouseName: string;
+  isMarried: boolean;
+};
+
+type InputFieldProps = {
+  label: string;
+  name: keyof FormState;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
+  type?: React.HTMLInputTypeAttribute;
+  required?: boolean;
+  icon?: React.ReactNode;
+  placeholder?: string;
+  maxLength?: number;
+};
+
+type DateFieldProps = {
+  label: string;
+  name: keyof FormState;
+  value: string;
+  setFormData: React.Dispatch<React.SetStateAction<FormState>>;
+  required?: boolean;
+  icon?: React.ReactNode;
+};
+
 export default function Register() {
   const [activeTab, setActiveTab] = useState<TabType>('register');
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormState>({
     name: '',
     email: '',
     dob: '',
@@ -48,8 +85,6 @@ export default function Register() {
     anniversary: '',
     linkedin: '',
     whatsapp: '',
-    instagram: '',
-    facebook: '',
     profilePhoto: '',
     fathersName: '',
     mothersName: '',
@@ -81,7 +116,7 @@ export default function Register() {
   const emptyForm = {
     name: '', email: '', dob: '', phone: '', qualification: '',
     currentStatus: '', gender: '' as Gender, anniversary: '', linkedin: '',
-    whatsapp: '', instagram: '', facebook: '', profilePhoto: '',
+    whatsapp: '', profilePhoto: '',
     fathersName: '', mothersName: '', spouseName: '', isMarried: false,
   };
 
@@ -131,9 +166,8 @@ export default function Register() {
       const filePath = `profile-photos/${fileName}`;
       const { error: uploadError } = await supabase.storage.from('member-photos').upload(filePath, file);
       if (uploadError) throw uploadError;
-      const { data: { publicUrl } } = supabase.storage.from('member-photos').getPublicUrl(filePath);
       setUploadingPhoto(false);
-      return publicUrl;
+      return filePath;
     } catch (err) {
       console.error('Error uploading photo:', err);
       setUploadingPhoto(false);
@@ -153,15 +187,13 @@ export default function Register() {
       anniversary: data.anniversary || '',
       linkedin: data.linkedin || '',
       whatsapp: data.whatsapp || '',
-      instagram: data.instagram || '',
-      facebook: data.facebook || '',
       profilePhoto: data.profile_photo || '',
       fathersName: data.fathers_name || '',
       mothersName: data.mothers_name || '',
       spouseName: data.spouse_name || '',
       isMarried: !!(data.spouse_name || data.anniversary),
     });
-    if (data.profile_photo) setPhotoPreview(data.profile_photo);
+    if (data.profile_photo) setPhotoPreview(resolveMemberPhotoUrl(data.profile_photo) || '');
     setOriginalEmail(data.email);
     setUserFound(true);
     setMultipleResults([]);
@@ -245,11 +277,6 @@ export default function Register() {
       setLoading(false);
       return;
     }
-    if (formData.instagram && !/^[a-zA-Z0-9._]{1,30}$/.test(formData.instagram)) {
-      showSubmitError('Instagram ID can only contain letters, numbers, dots, and underscores (max 30 characters).');
-      setLoading(false);
-      return;
-    }
     if (formData.isMarried && !formData.spouseName.trim()) {
       showSubmitError('Please enter your spouse name.');
       setLoading(false);
@@ -287,8 +314,6 @@ export default function Register() {
         anniversary: formData.isMarried && formData.anniversary ? formData.anniversary : null,
         linkedin: formData.linkedin || null,
         whatsapp: formData.whatsapp || null,
-        instagram: formData.instagram || null,
-        facebook: formData.facebook || null,
         profile_photo: photoUrl || null,
         // Only save parent names if they were shown/required
         fathers_name: showParentsFields ? (formData.fathersName || null) : null,
@@ -492,7 +517,7 @@ export default function Register() {
                           className="w-full text-left px-5 py-4 bg-white rounded-xl border-2 border-gray-200 hover:border-maroon-500 hover:shadow-md transition-all flex items-center gap-4 group"
                         >
                           {member.profile_photo ? (
-                            <img src={member.profile_photo} alt={member.name} className="w-12 h-12 rounded-full object-cover border-2 border-maroon-300" />
+                            <img src={resolveMemberPhotoUrl(member.profile_photo) || ''} alt={member.name} className="w-12 h-12 rounded-full object-cover border-2 border-maroon-300" />
                           ) : (
                             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-200 to-rose-200 flex items-center justify-center font-bold text-maroon-800 text-lg">
                               {member.name.charAt(0).toUpperCase()}
@@ -760,8 +785,6 @@ export default function Register() {
                   <div className="space-y-6">
                     <InputField label="LinkedIn Profile URL" name="linkedin" type="url" value={formData.linkedin} onChange={handleChange} placeholder="https://linkedin.com/in/your-profile" icon={<Linkedin size={18} className="text-blue-600" />} />
                     <InputField label="WhatsApp Number" name="whatsapp" type="tel" value={formData.whatsapp} onChange={handleChange} placeholder="10 digit number" maxLength={10} icon={<MessageCircle size={18} className="text-green-600" />} />
-                    <InputField label="Instagram ID" name="instagram" value={formData.instagram} onChange={handleChange} placeholder="your_instagram_handle" maxLength={30} icon={<Instagram size={18} className="text-pink-600" />} />
-                    <InputField label="Facebook Profile URL or Username" name="facebook" value={formData.facebook} onChange={handleChange} placeholder="https://facebook.com/yourprofile" icon={<Facebook size={18} className="text-blue-700" />} />
                   </div>
                 </div>
 
@@ -803,7 +826,7 @@ export default function Register() {
 
 /* ─── Reusable Components ─── */
 
-function InputField({ label, name, value, onChange, type = "text", required = false, icon = null, ...props }: any) {
+function InputField({ label, name, value, onChange, type = 'text', required = false, icon = null, ...props }: InputFieldProps) {
   return (
     <div>
       <label className="block text-gray-800 font-bold mb-3 flex items-center gap-2">
@@ -823,7 +846,7 @@ function InputField({ label, name, value, onChange, type = "text", required = fa
   );
 }
 
-function DateField({ label, name, value, setFormData, required = false, icon = null }: any) {
+function DateField({ label, name, value, setFormData, required = false, icon = null }: DateFieldProps) {
   return (
     <div>
       <label className="block text-gray-800 font-bold mb-3 flex items-center gap-2">
@@ -836,15 +859,15 @@ function DateField({ label, name, value, setFormData, required = false, icon = n
           name={name}
           value={value}
           required={required}
-          max={new Date().toISOString().split("T")[0]}
-          onChange={e => setFormData((prev: any) => ({ ...prev, [name]: e.target.value }))}
+          max={new Date().toISOString().split('T')[0]}
+          onChange={e => setFormData((prev) => ({ ...prev, [name]: e.target.value }))}
           className="w-full px-5 py-4 border-2 border-gray-300 rounded-xl focus:border-maroon-800 focus:ring-4 focus:ring-maroon-200 transition-all text-lg shadow-sm hover:border-maroon-400"
         />
       ) : (
         <Flatpickr
-          options={{ dateFormat: "Y-m-d", maxDate: "today", disableMobile: true }}
+          options={{ dateFormat: 'Y-m-d', maxDate: 'today', disableMobile: true }}
           value={value}
-          onChange={(_, dateStr) => setFormData((prev: any) => ({ ...prev, [name]: dateStr }))}
+          onChange={(_, dateStr) => setFormData((prev) => ({ ...prev, [name]: dateStr }))}
           className="w-full px-5 py-4 border-2 border-gray-300 rounded-xl focus:border-maroon-800 focus:ring-4 focus:ring-maroon-200 transition-all text-lg shadow-sm hover:border-maroon-400"
           required={required}
         />

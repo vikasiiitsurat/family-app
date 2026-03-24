@@ -1,6 +1,7 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { motion, AnimatePresence, useInView } from 'framer-motion';
-import { supabase } from '../lib/supabase';
+import { useEffect, useState, useRef } from 'react';
+import { motion, useInView } from 'framer-motion';
+import { loadMembersForClient } from '../lib/membersData';
+import { resolveMemberPhotoUrl } from '../lib/supabase';
 import Confetti from '../components/Confetti';
 
 // ─── DB SCHEMA ────────────────────────────────────────────────────────────────
@@ -42,7 +43,10 @@ function deduplicateMembers(members: Member[]): Member[] {
     const match = merged.find(e => namesMatch(m.name, e.name));
     if (match) {
       (Object.keys(m) as (keyof Member)[]).forEach(k => {
-        if (m[k] != null && m[k] !== '' && !match[k]) (match as any)[k] = m[k];
+        const value = m[k];
+        if (value != null && value !== '' && !match[k]) {
+          match[k] = value;
+        }
       });
     } else {
       merged.push({ ...m });
@@ -85,10 +89,6 @@ function getYearsMarried(anniversary: string): number {
   return new Date().getFullYear() - new Date(anniversary).getFullYear();
 }
 
-function formatShortDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-}
-
 function getInitials(name: string): string {
   return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
 }
@@ -112,7 +112,7 @@ function Avatar({
   size?: number;
   ring?: boolean;
 }) {
-  const grad = AVATAR_GRADIENTS[member.id?.charCodeAt(0) % AVATAR_GRADIENTS.length ?? 0];
+  const grad = AVATAR_GRADIENTS[member.id.charCodeAt(0) % AVATAR_GRADIENTS.length];
   return (
     <div
       className={`rounded-full flex-shrink-0 flex items-center justify-center text-white font-extrabold overflow-hidden
@@ -120,7 +120,7 @@ function Avatar({
       style={{ width: size, height: size, fontSize: size * 0.33, background: member.profile_photo ? 'transparent' : undefined }}
     >
       {member.profile_photo
-        ? <img src={member.profile_photo} alt={member.name} className="w-full h-full object-cover" />
+        ? <img src={resolveMemberPhotoUrl(member.profile_photo) || ''} alt={member.name} className="w-full h-full object-cover" />
         : (
           <div className={`w-full h-full bg-gradient-to-br ${grad} flex items-center justify-center`}>
             {getInitials(member.name)}
@@ -431,14 +431,14 @@ function MonthSection({ members }: { members: Member[] }) {
                   transition={{ delay: i * 0.08, duration: 0.5 }}
                   className="flex items-center gap-5 p-5 rounded-2xl bg-gradient-to-r from-orange-50/60 to-rose-50/60 border border-orange-100 hover:shadow-md hover:border-orange-200 transition-all group"
                 >
-                  {/* Date badge */}
+                  {/* Privacy-friendly event badge */}
                   <div className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center text-white font-black shadow-lg flex-shrink-0 ${type === 'birthday'
                     ? 'bg-gradient-to-br from-orange-400 to-rose-500'
                     : 'bg-gradient-to-br from-rose-500 to-fuchsia-600'}`}
                   >
-                    <span className="text-xl leading-none">{new Date(date).getDate()}</span>
+                    <span className="text-xl leading-none">{type === 'birthday' ? 'ðŸŽ‚' : 'ðŸ’'}</span>
                     <span className="text-[10px] opacity-80 font-bold">
-                      {new Date(date).toLocaleString('default', { month: 'short' })}
+                      SOON
                     </span>
                   </div>
 
@@ -447,7 +447,7 @@ function MonthSection({ members }: { members: Member[] }) {
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-gray-900 text-base group-hover:text-orange-700 transition-colors truncate">{m.name}</p>
                     <p className="text-gray-400 text-sm truncate">
-                      {m.current_status || (type === 'birthday' ? `Turning ${getAge(m.dob) + 1}` : `${getYearsMarried(date) + 1} years`)}
+                      {m.current_status || (type === 'birthday' ? `Turning ${getAge(m.dob) + 1}` : `${getYearsMarried(date) + 1} years married`)}
                     </p>
                   </div>
 
@@ -924,11 +924,10 @@ export default function Home({ onNavigate }: HomeProps) {
     try {
       setLoading(true);
       setError('');
-      const { data, error: err } = await supabase
-        .from('members')
-        .select('id, name, email, dob, phone, qualification, current_status, anniversary, linkedin, whatsapp, instagram, profile_photo, fathers_name, mothers_name, spouse_name, timezone')
-        .order('name', { ascending: true });
-
+      const { data, error: err } = await loadMembersForClient<Member>({
+        orderBy: 'name',
+        ascending: true,
+      });
       if (err) throw err;
 
       const clean = deduplicateMembers(data || []);
@@ -939,8 +938,9 @@ export default function Home({ onNavigate }: HomeProps) {
         setShowConfetti(true);
         setTimeout(() => setShowConfetti(false), 8000);
       }
-    } catch (e: any) {
-      setError('Could not load family data. Please try again.');
+    } catch (e: unknown) {
+      const reason = e instanceof Error && e.message ? ` (${e.message})` : '';
+      setError(`Could not load family data. Please try again.${reason}`);
       console.error(e);
     } finally {
       setLoading(false);

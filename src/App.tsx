@@ -5,8 +5,11 @@ import Register from './pages/Register';
 import Members from './pages/Members';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import FamilyTreePage from './pages/familyTree';
+
+type Page = 'home' | 'register' | 'members' | 'privacy' | 'familyTree';
+
 function App() {
-  const [currentPage, setCurrentPage] = useState<'home' | 'register' | 'members' |'privacy'>('home');
+  const [currentPage, setCurrentPage] = useState<Page>('home');
 
   return (
     <div className="min-h-screen bg-white">
@@ -16,7 +19,6 @@ function App() {
       {currentPage === 'members' && <Members />}
       {currentPage === 'privacy' && <PrivacyPolicy />}
       {currentPage === 'familyTree' && <FamilyTreePage />}
-      
     </div>
   );
 }

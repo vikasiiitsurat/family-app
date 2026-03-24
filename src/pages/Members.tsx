@@ -2,12 +2,13 @@ import { useState, useEffect, useMemo } from 'react';
 import {
   Search, Loader, Sparkles, Linkedin, Instagram, MessageCircle,
   Mail, Phone, GraduationCap, Briefcase, Calendar, Heart,
-  ExternalLink, Star, User, Zap, Copy, Check, Users,
-  Filter, ChevronDown, Facebook, UserCheck, Globe,
+  ExternalLink, Star, User, Copy, Check, Users,
+  Filter, ChevronDown, Facebook, Globe,
 } from 'lucide-react';
-import { supabase, Member } from '../lib/supabase';
+import { Member, resolveMemberPhotoUrl } from '../lib/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { isTodayBirthday, isTodayAnniversary } from '../lib/dateUtils';
+import { loadMembersForClient } from '../lib/membersData';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -64,6 +65,10 @@ function isMarried(member: Member): boolean {
 
 function isLateName(name?: string): boolean {
   return /^late\b/i.test((name || '').trim());
+}
+
+function getInstagramUrl(handle?: string | null): string {
+  return `https://instagram.com/${(handle || '').replace('@', '')}`;
 }
 
 function getUpcomingBirthdays(members: Member[]): Member[] {
@@ -132,7 +137,7 @@ function MemberCard({ member, index, isExpanded, onToggle, copiedField, onCopy }
   const isBirthday = isTodayBirthday(member.dob);
   const isAnniversary = isTodayAnniversary(member.anniversary);
   const isCelebrating = isBirthday || isAnniversary;
-  const newMember = isNewMember(member.created_at);
+  const newMember = member.created_at ? isNewMember(member.created_at) : false;
   const zodiac = member.dob ? getZodiac(member.dob) : null;
   const age = member.dob ? getAge(member.dob) : null;
   const married = isMarried(member);
@@ -146,11 +151,13 @@ function MemberCard({ member, index, isExpanded, onToggle, copiedField, onCopy }
 
   const handleEmail = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!member.email) return;
     window.location.href = `mailto:${member.email}`;
   };
 
   const handlePhone = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!member.phone) return;
     window.location.href = `tel:${member.phone}`;
   };
 
@@ -218,7 +225,7 @@ function MemberCard({ member, index, isExpanded, onToggle, copiedField, onCopy }
             {member.profile_photo ? (
               <div className="relative">
                 <img
-                  src={member.profile_photo}
+                  src={resolveMemberPhotoUrl(member.profile_photo) || ''}
                   alt={member.name}
                   onError={(e) => {
                     const t = e.target as HTMLImageElement;
@@ -287,7 +294,9 @@ function MemberCard({ member, index, isExpanded, onToggle, copiedField, onCopy }
 
           <p className="text-xs text-gray-400 flex items-center justify-center gap-1">
             <Calendar size={11} />
-            Joined {new Date(member.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            Joined {member.created_at
+              ? new Date(member.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+              : 'Recently'}
           </p>
         </div>
 
@@ -309,7 +318,7 @@ function MemberCard({ member, index, isExpanded, onToggle, copiedField, onCopy }
           )}
           {member.instagram && (
             <motion.button whileHover={{ scale: 1.2, rotate: 5 }} whileTap={{ scale: 0.9 }}
-              onClick={(e) => handleSocial(e, `https://instagram.com/${member.instagram.replace('@', '')}`)}
+              onClick={(e) => handleSocial(e, getInstagramUrl(member.instagram))}
               className="bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500 hover:opacity-90 text-white p-2 rounded-xl shadow-md transition-all" title="Instagram">
               <Instagram size={15} />
             </motion.button>
@@ -360,23 +369,25 @@ function MemberCard({ member, index, isExpanded, onToggle, copiedField, onCopy }
                 </h4>
 
                 {/* Email */}
-                <motion.div whileHover={{ x: 5 }} onClick={handleEmail}
-                  className="flex items-start gap-3 bg-gradient-to-r from-blue-50 to-cyan-50 p-3 rounded-xl cursor-pointer border-2 border-transparent hover:border-blue-200 group/c transition-all"
-                >
-                  <div className="bg-blue-500 p-1.5 rounded-lg text-white flex-shrink-0 shadow-sm group-hover/c:shadow-md transition-shadow">
-                    <Mail size={14} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-semibold text-blue-600 mb-0.5">Email · click to send</p>
-                    <p className="text-xs font-medium text-gray-700 break-all group-hover/c:text-blue-600 transition-colors">{member.email}</p>
-                  </div>
-                  <button
-                    onClick={(e) => onCopy(e, member.email, `email-${member.id}`)}
-                    className="bg-blue-100 hover:bg-blue-200 p-1.5 rounded-lg transition-colors opacity-0 group-hover/c:opacity-100"
+                {member.email && (
+                  <motion.div whileHover={{ x: 5 }} onClick={handleEmail}
+                    className="flex items-start gap-3 bg-gradient-to-r from-blue-50 to-cyan-50 p-3 rounded-xl cursor-pointer border-2 border-transparent hover:border-blue-200 group/c transition-all"
                   >
-                    {copiedField === `email-${member.id}` ? <Check size={12} className="text-green-600" /> : <Copy size={12} className="text-blue-600" />}
-                  </button>
-                </motion.div>
+                    <div className="bg-blue-500 p-1.5 rounded-lg text-white flex-shrink-0 shadow-sm group-hover/c:shadow-md transition-shadow">
+                      <Mail size={14} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-semibold text-blue-600 mb-0.5">Email · click to send</p>
+                      <p className="text-xs font-medium text-gray-700 break-all group-hover/c:text-blue-600 transition-colors">{member.email}</p>
+                    </div>
+                    <button
+                      onClick={(e) => onCopy(e, member.email ?? '', `email-${member.id}`)}
+                      className="bg-blue-100 hover:bg-blue-200 p-1.5 rounded-lg transition-colors opacity-0 group-hover/c:opacity-100"
+                    >
+                      {copiedField === `email-${member.id}` ? <Check size={12} className="text-green-600" /> : <Copy size={12} className="text-blue-600" />}
+                    </button>
+                  </motion.div>
+                )}
 
                 {/* Phone */}
                 {member.phone && (
@@ -391,12 +402,16 @@ function MemberCard({ member, index, isExpanded, onToggle, copiedField, onCopy }
                       <p className="text-xs font-medium text-gray-700 group-hover/c:text-green-600 transition-colors">{member.phone}</p>
                     </div>
                     <button
-                      onClick={(e) => onCopy(e, member.phone, `phone-${member.id}`)}
+                      onClick={(e) => onCopy(e, member.phone ?? '', `phone-${member.id}`)}
                       className="bg-green-100 hover:bg-green-200 p-1.5 rounded-lg transition-colors opacity-0 group-hover/c:opacity-100"
                     >
                       {copiedField === `phone-${member.id}` ? <Check size={12} className="text-green-600" /> : <Copy size={12} className="text-green-600" />}
                     </button>
                   </motion.div>
+                )}
+
+                {!member.email && !member.phone && (
+                  <p className="text-xs italic text-gray-400">No public contact details available.</p>
                 )}
               </motion.div>
 
@@ -439,7 +454,7 @@ function MemberCard({ member, index, isExpanded, onToggle, copiedField, onCopy }
                     <div className="flex items-center justify-between bg-white/70 p-2.5 rounded-xl">
                       <span className="text-xs font-semibold text-gray-700 flex items-center gap-2">🎂 Birthday</span>
                       <span className="text-xs font-bold text-gray-900">
-                        {new Date(member.dob).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
+                        {age !== null ? `${age} years old` : 'Birthday hidden'}
                         {zodiac && <span className="ml-2 text-violet-500">{zodiac.emoji}</span>}
                       </span>
                     </div>
@@ -448,7 +463,7 @@ function MemberCard({ member, index, isExpanded, onToggle, copiedField, onCopy }
                     <div className="flex items-center justify-between bg-white/70 p-2.5 rounded-xl">
                       <span className="text-xs font-semibold text-gray-700 flex items-center gap-2">💝 Anniversary</span>
                       <span className="text-xs font-bold text-gray-900">
-                        {new Date(member.anniversary).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
+                        {isAnniversary ? 'Celebrating today' : `${new Date().getFullYear() - new Date(member.anniversary).getFullYear()} years married`}
                       </span>
                     </div>
                   )}
@@ -482,7 +497,7 @@ function MemberCard({ member, index, isExpanded, onToggle, copiedField, onCopy }
                     )}
                     {member.instagram && (
                       <motion.button whileHover={{ scale: 1.05, y: -2 }} whileTap={{ scale: 0.95 }}
-                        onClick={(e) => handleSocial(e, `https://instagram.com/${member.instagram.replace('@', '')}`)}
+                        onClick={(e) => handleSocial(e, getInstagramUrl(member.instagram))}
                         className="flex items-center gap-1.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-2 rounded-xl font-semibold transition-all shadow-md text-xs"
                       >
                         <Instagram size={13} /> Instagram <ExternalLink size={10} />
@@ -512,6 +527,7 @@ function MemberCard({ member, index, isExpanded, onToggle, copiedField, onCopy }
 export default function Members() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterGender, setFilterGender] = useState<FilterGender>('all');
   const [filterMarital, setFilterMarital] = useState<FilterMarital>('all');
@@ -526,13 +542,15 @@ export default function Members() {
 
   const fetchMembers = async () => {
     try {
-      const { data, error } = await supabase
-        .from('members')
-        .select('*')
-        .order('created_at', { ascending: false });
+      setError('');
+      const { data, error } = await loadMembersForClient<Member>({
+        orderBy: 'created_at',
+        ascending: false,
+      });
       if (error) throw error;
       setMembers(data || []);
-    } catch (err) {
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not load members data.');
       console.error(err);
     } finally {
       setLoading(false);
@@ -613,6 +631,13 @@ export default function Members() {
       <FloatingParticle delay={0.8} x="50%" y="10%" size={10} />
 
       <div className="relative z-10">
+        {error && (
+          <div className="max-w-6xl mx-auto px-4 pt-6">
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 text-rose-700 px-4 py-3 text-sm">
+              {error}
+            </div>
+          </div>
+        )}
 
         {/* ════════════════ HERO SECTION ════════════════ */}
         <section className="relative pt-20 pb-28 px-4 text-center overflow-hidden">

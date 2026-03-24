@@ -252,7 +252,7 @@ export default function PrivacyPolicy() {
               </li>
               <li className="flex items-start gap-2">
                 <Eye size={16} className="text-indigo-500 mt-1 flex-shrink-0" />
-                <span className="text-gray-700">Birthday and anniversary dates (month and day only)</span>
+                <span className="text-gray-700">Birthday and anniversary celebration information without exact dates</span>
               </li>
             </ul>
           </div>

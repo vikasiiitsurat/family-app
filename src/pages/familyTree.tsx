@@ -1,16 +1,17 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { supabase } from '../lib/supabase';
+import { loadMembersForClient } from '../lib/membersData';
+import { resolveMemberPhotoUrl } from '../lib/supabase';
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 interface Member {
   id: string;
   name: string;
-  email: string;
+  email?: string | null;
   dob: string;
-  phone: string;
-  qualification: string;
-  current_status: string;
+  phone?: string | null;
+  qualification?: string | null;
+  current_status?: string | null;
   anniversary?: string | null;
   linkedin?: string | null;
   whatsapp?: string | null;
@@ -85,7 +86,10 @@ function deduplicateMembers(members: Member[]): Member[] {
     const found = merged.find(e => namesMatch(m.name, e.name));
     if (found) {
       (Object.keys(m) as (keyof Member)[]).forEach(k => {
-        if (m[k] != null && m[k] !== '' && !found[k]) (found as any)[k] = m[k];
+        const value = m[k];
+        if (value != null && value !== '' && !found[k]) {
+          found[k] = value;
+        }
       });
     } else merged.push({ ...m });
   }
@@ -103,7 +107,6 @@ function getAge(dob: string) {
   return a;
 }
 function getYearsMarried(ann: string) { return new Date().getFullYear() - new Date(ann).getFullYear(); }
-function fmtDate(d: string) { return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }); }
 function initials(name: string) { return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase(); }
 
 // ─── TREE BUILDER ─────────────────────────────────────────────────────────────
@@ -233,7 +236,7 @@ function Avatar({ member, size = 56, ghost = false }: { member: Member; size?: n
         }}
       >
         {member.profile_photo && !ghost
-          ? <img src={member.profile_photo} alt={member.name} className="w-full h-full object-cover" />
+          ? <img src={resolveMemberPhotoUrl(member.profile_photo) || ''} alt={member.name} className="w-full h-full object-cover" />
           : ghost ? '?' : initials(member.name)}
       </div>
     </div>
@@ -274,7 +277,7 @@ function Tooltip({ member, ghost }: { member: Member; ghost: boolean }) {
                   {bday ? '🎂 Birthday Today!' : '💍 Anniversary Today!'}
                 </div>
               )}
-              {member.dob && <Row icon="🎂" v={`${fmtDate(member.dob)} · Age ${getAge(member.dob)}`} />}
+              {member.dob && <Row icon="🎂" v={`Age ${getAge(member.dob)}`} />}
               {member.anniversary && <Row icon="💍" v={`${getYearsMarried(member.anniversary)}y married`} />}
               {member.qualification && <Row icon="🎓" v={member.qualification} />}
               {member.phone && <Row icon="📱" v={member.phone} />}
@@ -557,14 +560,14 @@ function StatsSidebar({ members, onClose }: { members: Member[]; onClose: () => 
 }
 
 // ─── TREE CANVAS ─────────────────────────────────────────────────────────────
-function TreeCanvas({ trees, members }: { trees: TreeNode[]; members: Member[] }) {
+function TreeCanvas({ trees }: { trees: TreeNode[] }) {
   const [zoom, setZoom] = useState(0.9);
   const [pan, setPan] = useState({ x: 60, y: 50 });
   const [isDragging, setIsDragging] = useState(false);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const drag = useRef({ x: 0, y: 0, px: 0, py: 0 });
   const canvasRef = useRef<HTMLDivElement | null>(null);
-  const pinch = useRef({ active: false, startDist: 0, startZoom: 1, worldX: 0, worldY: 0 });
+
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -583,7 +586,15 @@ function TreeCanvas({ trees, members }: { trees: TreeNode[]; members: Member[] }
   }, [allCoupleKeys]);
 
   const toggle = useCallback((k: string) => {
-    setExpanded(prev => { const next = new Set(prev); next.has(k) ? next.delete(k) : next.add(k); return next; });
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(k)) {
+        next.delete(k);
+      } else {
+        next.add(k);
+      }
+      return next;
+    });
   }, []);
 
   const layouts = useMemo(() => {
@@ -601,95 +612,30 @@ function TreeCanvas({ trees, members }: { trees: TreeNode[]; members: Member[] }
   const paths: JSX.Element[] = [], nodes: JSX.Element[] = [];
   layouts.forEach(l => renderTree(l, 0, paths, nodes, expanded, toggle));
 
-  const fitToView = useCallback(() => {
-    const el = canvasRef.current;
-    if (!el || !tw || !th) return;
-    const pad = window.innerWidth < 768 ? 22 : 48;
-    const zx = (el.clientWidth - pad * 2) / tw;
-    const zy = (el.clientHeight - pad * 2) / th;
-    const nextZoom = Math.max(0.3, Math.min(1.1, Math.min(zx, zy)));
-    setZoom(nextZoom);
-    setPan({
-      x: (el.clientWidth - tw * nextZoom) / 2,
-      y: Math.max(10, (el.clientHeight - th * nextZoom) / 2),
-    });
-  }, [tw, th]);
 
   useEffect(() => {
-    fitToView();
-  }, [fitToView]);
+    const element = canvasRef.current;
+    if (!element) return;
 
-  useEffect(() => {
-    const onResize = () => fitToView();
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, [fitToView]);
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      setZoom((currentZoom) => Math.min(2, Math.max(0.3, currentZoom - event.deltaY * 0.001)));
+    };
 
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    element.addEventListener('wheel', handleWheel, { passive: false });
+    return () => element.removeEventListener('wheel', handleWheel);
+
   }, []);
 
   return (
     <div ref={canvasRef} className="w-full h-full overflow-hidden relative"
-      style={{ cursor: isDragging ? 'grabbing' : 'grab', touchAction: 'none' }}
+
+      style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+
       onMouseDown={e => { if (e.button !== 0) return; setIsDragging(true); drag.current = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y }; }}
       onMouseMove={e => { if (isDragging) setPan({ x: drag.current.px + e.clientX - drag.current.x, y: drag.current.py + e.clientY - drag.current.y }); }}
       onMouseUp={() => setIsDragging(false)}
       onMouseLeave={() => setIsDragging(false)}
-      onTouchStart={e => {
-        if (e.touches.length === 2) {
-          const t1 = e.touches[0];
-          const t2 = e.touches[1];
-          const dx = t2.clientX - t1.clientX;
-          const dy = t2.clientY - t1.clientY;
-          const dist = Math.hypot(dx, dy);
-          const cx = (t1.clientX + t2.clientX) / 2;
-          const cy = (t1.clientY + t2.clientY) / 2;
-          pinch.current = {
-            active: true,
-            startDist: dist,
-            startZoom: zoom,
-            worldX: (cx - pan.x) / zoom,
-            worldY: (cy - pan.y) / zoom,
-          };
-          setIsDragging(false);
-          return;
-        }
-        const t = e.touches[0];
-        if (!t) return;
-        setIsDragging(true);
-        drag.current = { x: t.clientX, y: t.clientY, px: pan.x, py: pan.y };
-      }}
-      onTouchMove={e => {
-        if (pinch.current.active && e.touches.length === 2) {
-          const t1 = e.touches[0];
-          const t2 = e.touches[1];
-          const dx = t2.clientX - t1.clientX;
-          const dy = t2.clientY - t1.clientY;
-          const dist = Math.hypot(dx, dy);
-          const cx = (t1.clientX + t2.clientX) / 2;
-          const cy = (t1.clientY + t2.clientY) / 2;
-          const nextZoom = Math.min(2, Math.max(0.3, pinch.current.startZoom * (dist / Math.max(1, pinch.current.startDist))));
-          e.preventDefault();
-          setZoom(nextZoom);
-          setPan({
-            x: cx - pinch.current.worldX * nextZoom,
-            y: cy - pinch.current.worldY * nextZoom,
-          });
-          return;
-        }
-        const t = e.touches[0];
-        if (!t || !isDragging) return;
-        e.preventDefault();
-        setPan({ x: drag.current.px + t.clientX - drag.current.x, y: drag.current.py + t.clientY - drag.current.y });
-      }}
-      onTouchEnd={e => {
-        if (e.touches.length < 2) pinch.current.active = false;
-        if (e.touches.length === 0) setIsDragging(false);
-      }}
-      onWheel={e => { e.preventDefault(); setZoom(z => Math.min(2, Math.max(0.3, z - e.deltaY * 0.001))); }}
     >
       <div style={{ transform: `translate(${pan.x}px,${pan.y}px) scale(${zoom})`, transformOrigin: '0 0', position: 'absolute', width: tw, height: th }}>
         <svg className="absolute inset-0 pointer-events-none overflow-visible" width={tw} height={th} style={{ zIndex: 1 }}>
@@ -724,7 +670,7 @@ function TreeCanvas({ trees, members }: { trees: TreeNode[]; members: Member[] }
 }
 
 // ─── MAIN EXPORT ─────────────────────────────────────────────────────────────
-export default function FamilyTreePage({ onNavigate }: { onNavigate?: (page: string) => void }) {
+export default function FamilyTreePage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -735,16 +681,17 @@ export default function FamilyTreePage({ onNavigate }: { onNavigate?: (page: str
   useEffect(() => {
     (async () => {
       try {
-        const { data, error: err } = await supabase
-          .from('members')
-          .select('id,name,email,dob,phone,qualification,current_status,anniversary,linkedin,whatsapp,instagram,profile_photo,fathers_name,mothers_name,spouse_name,timezone')
-          .order('name', { ascending: true });
+        const { data, error: err } = await loadMembersForClient<Member>({
+          orderBy: 'name',
+          ascending: true,
+        });
         if (err) throw err;
         const clean = deduplicateMembers(data || []);
         setMembers(clean);
         setTrees(buildTree(clean));
-      } catch (e: any) {
-        setError('Could not load family data.');
+      } catch (e: unknown) {
+        const reason = e instanceof Error && e.message ? ` (${e.message})` : '';
+        setError(`Could not load family data.${reason}`);
       } finally {
         setLoading(false);
       }
@@ -828,7 +775,7 @@ export default function FamilyTreePage({ onNavigate }: { onNavigate?: (page: str
             <p className="text-sm" style={{ color: T.textMuted }}>Register members with parent/spouse names to grow the tree</p>
           </div>
         ) : (
-          <TreeCanvas trees={trees} members={members} />
+          <TreeCanvas trees={trees} />
         )}
       </div>
 
